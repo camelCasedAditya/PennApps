@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Quiz - {{ quiz.lesson.lesson_name }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .question {
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .question h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .options {
+            margin-top: 15px;
+        }
+        .option {
+            margin-bottom: 10px;
+        }
+        .option input[type="radio"] {
+            margin-right: 10px;
+        }
+        .option label {
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .option input[type="radio"]:checked + label {
+            background-color: #e3f2fd;
+            border: 2px solid #007bff;
+        }
+        .submit-btn {
+            background-color: #28a745;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            display: block;
+            margin: 30px auto 0;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #218838;
+        }
+        .lesson-info {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .lesson-info h2 {
+            margin-top: 0;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lesson-info">
+            <h2>{{ quiz.lesson.lesson_name }}</h2>
+            <p>{{ quiz.lesson.lesson_description }}</p>
+        </div>
+
+        <h1>Multiple Choice Quiz</h1>
+
+        <form method="post" action="{% url 'generation:submit_quiz' quiz.id %}">
+            {% csrf_token %}
+
+            {% for question in questions %}
+            <div class="question">
+                <h3>Question {{ forloop.counter }}</h3>
+                <p>{{ question.question }}</p>
+
+                <div class="options">
+                    {% for option_key, option_value in question.options.items %}
+                    <div class="option">
+                        <input type="radio"
+                               id="q{{ forloop.parentloop.counter }}_{{ option_key }}"
+                               name="question_{{ forloop.parentloop.counter0 }}"
+                               value="{{ option_key }}"
+                               required>
+                        <label for="q{{ forloop.parentloop.counter }}_{{ option_key }}">
+                            <strong>{{ option_key }}.</strong> {{ option_value }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+
+            <button type="submit" class="submit-btn">Submit Quiz</button>
+        </form>
+    </div>
+</body>
+</html>

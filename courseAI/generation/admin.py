@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CourseGeneration, GeneratedChapter, GeneratedLesson, LessonType, GenerationLog
+from .models import CourseGeneration, GeneratedChapter, GeneratedLesson, LessonType, GenerationLog, MultipleChoiceQuiz, ArticleContent, YouTubeVideo, ExternalArticles
 
 
 @admin.register(CourseGeneration)
@@ -51,3 +51,8 @@ class GenerationLogAdmin(admin.ModelAdmin):
     search_fields = ['step', 'message', 'course_generation__project_description']
     readonly_fields = ['created_at']
     ordering = ['-created_at']
+
+admin.site.register(MultipleChoiceQuiz)
+admin.site.register(ArticleContent)
+admin.site.register(YouTubeVideo)
+admin.site.register(ExternalArticles)

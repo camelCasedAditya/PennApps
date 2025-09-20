@@ -59,6 +59,8 @@ class LessonType(models.Model):
     type_id = models.IntegerField(unique=True)  # 1, 2, 3, etc.
     display_name = models.CharField(max_length=100, default="")  # e.g., 'Video', 'Text Response'
     description = models.TextField(blank=True)
+
+    complete = models.BooleanField(default=False)
     
     class Meta:
         ordering = ['type_id']
@@ -121,3 +123,100 @@ class GenerationLog(models.Model):
         
     def __str__(self):
         return f"{self.step} - {self.status} ({self.level})"
+
+class MultipleChoiceQuiz(models.Model):
+    """Multiple choice quiz for a lesson."""
+    lesson = models.OneToOneField(GeneratedLesson, on_delete=models.CASCADE, related_name='quiz')
+    
+    # Store quiz data as JSON
+    quiz_data = models.JSONField(help_text="Quiz questions, options, and answers in JSON format")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Quiz for {self.lesson.lesson_name}"
+
+class QuizAttempt(models.Model):
+    """Store user attempts at completing a multiple choice quiz."""
+    quiz = models.ForeignKey(MultipleChoiceQuiz, on_delete=models.CASCADE, related_name='attempts')
+    
+    # Store user answers as JSON
+    user_answers = models.JSONField(help_text="User's answers to quiz questions in JSON format")
+    
+    # Store results as JSON (correct/incorrect for each question)
+    results = models.JSONField(help_text="Results showing which answers were correct/incorrect")
+    
+    # Overall score
+    score = models.IntegerField(help_text="Number of correct answers")
+    total_questions = models.IntegerField(help_text="Total number of questions")
+    
+    # Optional user association
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"Quiz attempt for {self.quiz.lesson.lesson_name} - Score: {self.score}/{self.total_questions}"
+    
+class ArticleContent(models.Model):
+    """Store generated article content for text-based lessons."""
+    lesson = models.OneToOneField(GeneratedLesson, on_delete=models.CASCADE, related_name='article')
+    
+    # Store article content
+    content = models.TextField(help_text="Generated article content")
+    
+    def __str__(self):
+        return f"Article for {self.lesson.lesson_name}"
+
+class YouTubeVideo(models.Model):
+    """Store YouTube video info for a lesson."""
+    lesson = models.ForeignKey(GeneratedLesson, on_delete=models.CASCADE, related_name='youtube_videos')
+    video_id = models.CharField(max_length=50)
+    title = models.CharField(max_length=300)
+    description = models.TextField(blank=True)
+    thumbnail_url = models.URLField(blank=True)
+    channel_title = models.CharField(max_length=200, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    video_url = models.URLField(blank=True)
+    # Store the full API response for flexibility
+    raw_data = models.JSONField(null=True, blank=True)
+
+    def __str__(self):
+        return f"YouTube: {self.title} ({self.video_id})"
+
+class Project(models.Model):
+    """Programming project for interactive lessons."""
+    lesson = models.OneToOneField(GeneratedLesson, on_delete=models.CASCADE, related_name='project')
+    
+    # Starter code files as JSON (filename -> code)
+    starter_files = models.JSONField(help_text="Dictionary of filename to starter code content")
+    
+    # Grading methodology
+    GRADING_CHOICES = [
+        ('ai_review', 'AI Review'),
+        ('terminal_matching', 'Terminal Matching'),
+    ]
+    grading_method = models.CharField(max_length=20, choices=GRADING_CHOICES, default='ai_review')
+    
+    # Expected output for terminal matching
+    expected_output = models.TextField(blank=True, help_text="Expected terminal output for grading")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Project for {self.lesson.lesson_name}"
+
+class ExternalArticles(models.Model):
+    """Store external article URLs for text-based lessons."""
+    lesson = models.OneToOneField(GeneratedLesson, on_delete=models.CASCADE, related_name='external_article')
+    
+    # Store article URL instead of content
+    url = models.URLField(help_text="URL of the external article")
+    
+    def __str__(self):
+        return f"External Article for {self.lesson.lesson_name}"

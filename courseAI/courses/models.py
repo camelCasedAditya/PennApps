@@ -3,8 +3,23 @@ from django.contrib.auth.models import User
 
 # Create your models here.
 class Project(models.Model):
+    """Programming project for interactive lessons."""
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    
+    # Link to the generated lesson that created this project
+    lesson = models.OneToOneField('generation.GeneratedLesson', on_delete=models.CASCADE, related_name='programming_project', null=True, blank=True)
+    
+    # Grading methodology
+    GRADING_CHOICES = [
+        ('ai_review', 'AI Review'),
+        ('terminal_matching', 'Terminal Matching'),
+    ]
+    grading_method = models.CharField(max_length=20, choices=GRADING_CHOICES, default='ai_review')
+    
+    # Expected output for terminal matching
+    expected_output = models.TextField(blank=True, help_text="Expected terminal output for grading")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
