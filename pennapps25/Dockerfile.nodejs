@@ -1,0 +1,40 @@
+FROM codercom/code-server:latest
+
+# Switch to root to install packages
+USER root
+
+# Install Node.js, Python, and development tools
+RUN apt-get update && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y \
+    nodejs \
+    python3 \
+    python3-pip \
+    python3-venv \
+    git \
+    curl \
+    wget \
+    vim \
+    nano \
+    htop \
+    tree \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symlinks for convenience
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+# Install global npm packages
+RUN npm install -g yarn pnpm typescript ts-node nodemon
+
+# Switch back to coder user
+USER coder
+
+# Set working directory
+WORKDIR /home/coder/workspace
+
+# Expose port
+EXPOSE 8080
+
+# Start code-server
+CMD ["code-server", "--bind-addr", "0.0.0.0:8080", "--auth", "password", "/home/coder/workspace"]

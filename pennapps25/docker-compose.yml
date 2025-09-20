@@ -1,0 +1,74 @@
+services:
+  # Python development environment
+  python-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: python-code-editor
+    ports:
+      - "8080:8080"
+    command: ["code-server", "--auth", "none", "--host", "0.0.0.0", "--port", "8080", "/home/coder/workspace"]
+    volumes:
+      - ./workspace-python:/home/coder/workspace
+
+  # Node.js/JavaScript development environment
+  nodejs-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile.nodejs
+    container_name: nodejs-code-editor
+    ports:
+      - "8081:8080"
+    command: ["code-server", "--auth", "none", "--host", "0.0.0.0", "--port", "8080", "/home/coder/workspace"]
+    volumes:
+      - ./workspace-nodejs:/home/coder/workspace
+
+  # Java development environment
+  java-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+    container_name: java-code-editor
+    ports:
+      - "8082:8080"
+    command: ["code-server", "--auth", "none", "--host", "0.0.0.0", "--port", "8080", "/home/coder/workspace"]
+    volumes:
+      - ./workspace-java:/home/coder/workspace
+
+  # Go development environment
+  go-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile.go
+    container_name: go-code-editor
+    ports:
+      - "8083:8080"
+    command: ["code-server", "--auth", "none", "--host", "0.0.0.0", "--port", "8080", "/home/coder/workspace"]
+    volumes:
+      - ./workspace-go:/home/coder/workspace
+
+  # Rust development environment
+  rust-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile.rust
+    container_name: rust-code-editor
+    ports:
+      - "8084:8080"
+    command: ["code-server", "--auth", "none", "--host", "0.0.0.0", "--port", "8080", "/home/coder/workspace"]
+    volumes:
+      - ./workspace-rust:/home/coder/workspace
+
+  # Simple code-server container (basic editor)
+  simple-editor:
+    image: codercom/code-server:latest
+    container_name: simple-code-editor
+    ports:
+      - "8085:8080"
+    command: ["code-server", "--auth", "none", "--host", "0.0.0.0", "--port", "8080", "/home/coder/workspace"]
+    volumes:
+      - ./workspace-simple:/home/coder/workspace
+
+volumes:
+  code-server-config:
+  code-server-config-python:

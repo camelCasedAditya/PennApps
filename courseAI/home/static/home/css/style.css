@@ -1,0 +1,179 @@
+/* CourseAI Custom Styles */
+
+:root {
+    --primary-color: #667eea;
+    --secondary-color: #764ba2;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #17a2b8;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.6;
+}
+
+/* Custom gradient backgrounds */
+.bg-gradient {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+}
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Custom button styles */
+.btn-custom {
+    border-radius: 25px;
+    padding: 10px 25px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-custom:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+/* Card hover effects */
+.card {
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+/* Navbar customization */
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+/* Hero section */
+.min-vh-75 {
+    min-height: 75vh;
+}
+
+/* Chatbot specific styles */
+.chatbot-container {
+    border: 2px solid #e9ecef;
+    background: linear-gradient(145deg, #ffffff, #f8f9fa);
+}
+
+.chat-messages {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd3da #f8f9fa;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #f8f9fa;
+    border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #cbd3da;
+    border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
+}
+
+/* Message bubbles */
+.message-bubble {
+    position: relative;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    border: 1px solid #e9ecef;
+}
+
+.bot-message .message-bubble::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 15px;
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-right: 8px solid #f8f9fa;
+    border-left: none;
+}
+
+.user-message .message-bubble::before {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 15px;
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-left: 8px solid #007bff;
+    border-right: none;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .display-4 {
+        font-size: 2.5rem;
+    }
+    
+    .lead {
+        font-size: 1.1rem;
+    }
+    
+    .hero-section {
+        min-height: 60vh;
+        padding: 3rem 0;
+    }
+    
+    .chatbot-container {
+        margin: 0 10px;
+    }
+    
+    .chat-messages {
+        height: 300px;
+    }
+    
+    .message-bubble {
+        max-width: 95%;
+    }
+}
+
+/* Loading animation */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* Pulse animation for online status */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.text-success i {
+    animation: pulse 2s infinite;
+}

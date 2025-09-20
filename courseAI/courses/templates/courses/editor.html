@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Editor</title>
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #save-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #save-btn {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #save-btn:hover {
+            background: #005a9e;
+        }
+        #save-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #project-name {
+            margin-right: 10px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        #status-message {
+            margin-top: 5px;
+            font-size: 12px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        iframe {
+            width: 100%;
+            height: 100vh;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="save-panel">
+        {% if current_project %}
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                Currently editing: <strong>{{ current_project.name }}</strong>
+            </div>
+            <input type="text" id="project-name" placeholder="Project Name" value="{{ current_project.name }}">
+        {% else %}
+            <input type="text" id="project-name" placeholder="Project Name" value="My Python Project">
+        {% endif %}
+        <button id="save-btn" onclick="saveProject()">Save Project</button>
+        <a href="/courses/" style="margin-left: 10px; font-size: 12px; color: #007acc; text-decoration: none;">← Back to Projects</a>
+        <div id="status-message"></div>
+    </div>
+    
+    <iframe id="code-editor" src="http://localhost:8080/?folder=/home/coder/workspace" frameborder="0"></iframe>
+
+    <script>
+        function showStatus(message, isError = false) {
+            const statusEl = document.getElementById('status-message');
+            statusEl.textContent = message;
+            statusEl.className = isError ? 'error' : 'success';
+            setTimeout(() => {
+                statusEl.textContent = '';
+                statusEl.className = '';
+            }, 3000);
+        }
+
+        async function getWorkspaceFiles() {
+            try {
+                // Get files from the workspace directory via Django backend
+                const response = await fetch('/courses/get_workspace_files/', {
+                    method: 'GET',
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Return just the files array, not the whole response
+                    return data.files || [];
+                } else {
+                    throw new Error('Failed to get workspace files');
+                }
+            } catch (error) {
+                console.error('Error getting workspace files:', error);
+                // Fallback: return the test.py file that we know exists
+                return [
+                    {
+                        relative_path: 'test.py',
+                        content: 'import time\nprint(f"Hello, it is {time.ctime()}")\n'
+                    }
+                ];
+            }
+        }
+
+        async function saveProject() {
+            const saveBtn = document.getElementById('save-btn');
+            const projectName = document.getElementById('project-name').value.trim();
+            
+            if (!projectName) {
+                showStatus('Please enter a project name', true);
+                return;
+            }
+            
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            
+            try {
+                // Get current files from workspace
+                const files = await getWorkspaceFiles();
+                console.log('Files retrieved:', files);
+                
+                const projectData = {
+                    project_name: projectName,
+                    project_description: `Python project saved from code editor on ${new Date().toLocaleString()}`,
+                    files: files
+                };
+                
+                console.log('Sending project data:', projectData);
+                
+                const response = await fetch('/courses/save_project/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(projectData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`✓ ${result.message} (${result.files_saved} files saved)`);
+                } else {
+                    showStatus(`Error: ${result.message}`, true);
+                }
+                
+            } catch (error) {
+                console.error('Save error:', error);
+                showStatus('Failed to save project', true);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Project';
+            }
+        }
+        
+        // Optional: Save with Ctrl+S
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                saveProject();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saved Projects</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .project-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        
+        .project-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .project-name {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .project-description {
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .project-meta {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 15px;
+        }
+        
+        .project-files {
+            margin-bottom: 15px;
+        }
+        
+        .file-list {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 10px 15px;
+            background: #007acc;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #005a9e;
+        }
+        
+        .btn-new {
+            background: #28a745;
+        }
+        
+        .btn-new:hover {
+            background: #218838;
+        }
+        
+        .no-projects {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Saved Projects</h1>
+        <p>Manage and load your saved coding projects</p>
+        <a href="/courses/editor/" class="btn btn-new">+ New Project</a>
+    </div>
+
+    {% if projects %}
+        <div class="project-grid">
+            {% for project in projects %}
+                <div class="project-card">
+                    <div class="project-name">{{ project.name }}</div>
+                    
+                    {% if project.description %}
+                        <div class="project-description">{{ project.description }}</div>
+                    {% endif %}
+                    
+                    <div class="project-meta">
+                        Created: {{ project.created_at|date:"M d, Y H:i" }}
+                        {% if project.owner %}
+                            | Owner: {{ project.owner.username }}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="project-files">
+                        <strong>Files ({{ project.files.count }}):</strong>
+                        <div class="file-list">
+                            {% for file in project.files.all|slice:":5" %}
+                                {{ file.relative_path }}{% if not forloop.last %}, {% endif %}
+                            {% empty %}
+                                No files
+                            {% endfor %}
+                            {% if project.files.count > 5 %}
+                                ... and {{ project.files.count|add:"-5" }} more
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <a href="/courses/editor/{{ project.id }}/" class="btn">Load Project</a>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="no-projects">
+            <h3>No projects saved yet</h3>
+            <p>Create your first project by clicking the "New Project" button above.</p>
+        </div>
+    {% endif %}
+</body>
+</html>
