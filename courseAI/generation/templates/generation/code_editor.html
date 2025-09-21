@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Editor - {{ lesson.lesson_name }}</title>
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #control-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-width: 250px;
+        }
+        #correct-btn, #save-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            width: 100%;
+        }
+        #correct-btn:hover, #save-btn:hover {
+            background: #218838;
+        }
+        #correct-btn:disabled, #save-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #status-message {
+            margin-top: 10px;
+            font-size: 12px;
+            min-height: 20px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        iframe {
+            width: 100%;
+            height: 100vh;
+            border: none;
+        }
+        #lesson-info {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        #correction-result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 3px;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        #correction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 5px 0;
+        }
+        #correction-content {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #correction-content.collapsed {
+            display: none;
+        }
+        #minimize-btn {
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0 5px;
+            color: #666;
+        }
+        #minimize-btn:hover {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="control-panel">
+        <div id="lesson-info">
+            <strong>{{ lesson.lesson_name }}</strong><br>
+            {{ lesson.lesson_description|truncatechars:100 }}
+        </div>
+
+        <button id="correct-btn" onclick="submitForCorrection()">Get Code Correction</button>
+        <button id="save-btn" onclick="saveProject()">Save Project</button>
+
+        <div id="status-message"></div>
+        <div id="correction-result">
+            <div id="correction-header" onclick="toggleCorrection()">
+                <strong>Code Feedback</strong>
+                <button id="minimize-btn" title="Minimize/Maximize">−</button>
+            </div>
+            <div id="correction-content">
+                <!-- Feedback content will be inserted here by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <iframe id="code-editor" src="http://localhost:8080/?folder=/home/coder/workspace" frameborder="0"></iframe>
+
+    <script>
+        function toggleCorrection() {
+            const content = document.getElementById('correction-content');
+            const btn = document.getElementById('minimize-btn');
+            
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                btn.textContent = '−';
+                btn.title = 'Minimize';
+            } else {
+                content.classList.add('collapsed');
+                btn.textContent = '+';
+                btn.title = 'Maximize';
+            }
+        }
+
+        function showStatus(message, isError = false, isInfo = false) {
+            const statusEl = document.getElementById('status-message');
+            statusEl.textContent = message;
+            if (isError) {
+                statusEl.className = 'error';
+            } else if (isInfo) {
+                statusEl.className = 'info';
+            } else {
+                statusEl.className = 'success';
+            }
+        }
+
+        async function getWorkspaceFiles() {
+            try {
+                // Get files from the workspace directory via Django backend
+                const response = await fetch('/courses/get_workspace_files/', {
+                    method: 'GET',
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.files || [];
+                } else {
+                    throw new Error('Failed to get workspace files');
+                }
+            } catch (error) {
+                console.error('Error getting workspace files:', error);
+                // Fallback: return the main.py file that we know exists
+                return [
+                    {
+                        relative_path: 'main.py',
+                        content: '# Write your code here\nprint("Hello World")\n'
+                    }
+                ];
+            }
+        }
+
+        async function submitForCorrection() {
+            const correctBtn = document.getElementById('correct-btn');
+            const correctionResult = document.getElementById('correction-result');
+
+            correctBtn.disabled = true;
+            correctBtn.textContent = 'Analyzing...';
+            showStatus('Sending code for analysis...', false, true);
+
+            try {
+                const response = await fetch(`/generation/lesson/{{ lesson.id }}/correct/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus('✓ Code correction completed!');
+
+                    const correction = result.correction;
+                    correctionResult.style.display = 'block';
+                    
+                    // Display pass/fail prominently
+                    const passFailClass = correction.pass_fail === 'PASS' ? 'success' : 'error';
+                    const passFailHtml = `<div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;" class="${passFailClass}">Result: ${correction.pass_fail} (Grade: ${correction.grade})</div>`;
+                    
+                    const correctionContent = document.getElementById('correction-content');
+                    correctionContent.innerHTML = `
+                        ${passFailHtml}
+                        <strong>Issues Found:</strong>
+                        <ul>${correction.issues_found.map(issue => `<li>${issue}</li>`).join('')}</ul>
+                        <strong>Explanation:</strong><br>
+                        ${correction.explanation}
+                        <strong>Suggestions:</strong>
+                        <ul>${correction.suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}</ul>
+                    `;
+                } else {
+                    showStatus(`Error: ${result.message}`, true);
+                }
+
+            } catch (error) {
+                console.error('Correction error:', error);
+                showStatus('Failed to get code correction', true);
+            } finally {
+                correctBtn.disabled = false;
+                correctBtn.textContent = 'Get Code Correction';
+            }
+        }
+
+        async function saveProject() {
+            const saveBtn = document.getElementById('save-btn');
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            showStatus('Saving project...', false, true);
+
+            try {
+                // Get current files from workspace
+                const files = await getWorkspaceFiles();
+                console.log('Files retrieved:', files);
+
+                const projectData = {
+                    project_name: "{{ project.name }}",
+                    project_description: "{{ project.description }}",
+                    files: files
+                };
+
+                console.log('Sending project data:', projectData);
+
+                const response = await fetch('/courses/save_project/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(projectData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus(`✓ ${result.message} (${result.files_saved} files saved)`);
+                } else {
+                    showStatus(`Error: ${result.message}`, true);
+                }
+
+            } catch (error) {
+                console.error('Save error:', error);
+                showStatus('Failed to save project', true);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Project';
+            }
+        }
+
+        // Optional: Submit for correction with Ctrl+Enter
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                submitForCorrection();
+            }
+        });
+
+        // Optional: Save with Ctrl+S
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                saveProject();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -51,12 +51,32 @@ function sendMessage() {
     // Show typing indicator
     showTypingIndicator();
     
-    // Simulate AI response (replace with actual API call)
-    setTimeout(() => {
+    // Call the real API
+    fetch('/api/chat/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            message: message
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
         hideTypingIndicator();
-        const response = generateMockResponse(message);
-        addMessage(response, 'bot');
-    }, 1500);
+        
+        if (data.success) {
+            addMessage(data.response, 'bot');
+        } else {
+            addMessage('Sorry, I encountered an error. Please try again.', 'bot');
+            console.error('Chat API Error:', data.error);
+        }
+    })
+    .catch(error => {
+        hideTypingIndicator();
+        addMessage('Sorry, I\'m having trouble connecting. Please check your internet connection and try again.', 'bot');
+        console.error('Network Error:', error);
+    });
 }
 
 function addMessage(message, sender) {
@@ -141,16 +161,41 @@ function scrollToBottom() {
 }
 
 function clearChat() {
-    const chatMessages = document.getElementById('chatMessages');
-    
-    // Keep only the welcome message
-    const welcomeMessage = chatMessages.firstElementChild;
-    chatMessages.innerHTML = '';
-    chatMessages.appendChild(welcomeMessage);
-    
-    // Reset input
-    document.getElementById('chatInput').value = '';
-    document.getElementById('chatInput').focus();
+    // Call the API to clear chat history
+    fetch('/api/chat/clear/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Clear the UI
+            const chatMessages = document.getElementById('chatMessages');
+            
+            // Keep only the welcome message
+            const welcomeMessage = chatMessages.firstElementChild;
+            chatMessages.innerHTML = '';
+            chatMessages.appendChild(welcomeMessage);
+            
+            // Reset input
+            document.getElementById('chatInput').value = '';
+            document.getElementById('chatInput').focus();
+        } else {
+            console.error('Error clearing chat:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Network Error:', error);
+        // Still clear the UI even if API call fails
+        const chatMessages = document.getElementById('chatMessages');
+        const welcomeMessage = chatMessages.firstElementChild;
+        chatMessages.innerHTML = '';
+        chatMessages.appendChild(welcomeMessage);
+        document.getElementById('chatInput').value = '';
+        document.getElementById('chatInput').focus();
+    });
 }
 
 function escapeHtml(text) {

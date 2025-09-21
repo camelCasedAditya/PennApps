@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -875,3 +875,173 @@ def lesson_youtube(request, lesson_id):
     from .models import GeneratedLesson
     lesson = GeneratedLesson.objects.get(id=lesson_id)
     return render(request, 'generation/youtube_vid.html', {'lesson': lesson})
+
+def load_lesson_project(request, lesson_id):
+    """Load a programming project for a lesson into the code editor."""
+    workspace_path = '/Users/aditya/Documents/Programming/Hackathon/PennApps/pennapps25/workspace-python/'
+    
+    # Get the lesson
+    lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
+    
+    # Get the associated project
+    try:
+        project = lesson.programming_project
+    except Project.DoesNotExist:
+        # If no project exists, create a default one
+        project = Project.objects.create(
+            lesson=lesson,
+            name=f"Exercise for {lesson.lesson_name}",
+            description=f"Programming exercise: {lesson.lesson_description}",
+            grading_method='ai_review'
+        )
+        # Create a default starter file
+        File.objects.create(
+            project=project,
+            name='main.py',
+            relative_path='main.py',
+            content="# Write your code here\nprint('Hello World')"
+        )
+    
+    # Clear existing files in workspace (except venv)
+    if os.path.exists(workspace_path):
+        items = os.listdir(workspace_path)
+        print(f"Clearing workspace: {items}")
+        for item in items:
+            if item != 'venv':
+                item_path = os.path.join(workspace_path, item)
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+                elif os.path.isdir(item_path):
+                    import shutil
+                    shutil.rmtree(item_path)
+    
+    # Load project files
+    files = project.files.all()
+    print(f"Loading project '{project.name}' with {files.count()} files")
+    
+    # Create all the project files
+    for file_obj in files:
+        file_path = os.path.join(workspace_path, file_obj.relative_path)
+        
+        # Create directory structure if it doesn't exist
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        # Write file content
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(file_obj.content)
+            
+        print(f"Created file: {file_obj.relative_path}")
+    
+    context = {
+        'lesson': lesson,
+        'project': project,
+        'files': files
+    }
+    
+    return render(request, 'generation/code_editor.html', context)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def submit_code_correction(request, lesson_id):
+    """Submit code for AI correction."""
+    try:
+        lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
+        project = lesson.programming_project
+        
+        # Get current code from workspace
+        workspace_path = '/Users/aditya/Documents/Programming/Hackathon/PennApps/pennapps25/workspace-python/'
+        code_content = ""
+        
+        # Read the main file (assuming main.py)
+        main_file_path = os.path.join(workspace_path, 'main.py')
+        if os.path.exists(main_file_path):
+            with open(main_file_path, 'r', encoding='utf-8') as f:
+                code_content = f.read()
+        
+        if not code_content.strip():
+            return JsonResponse({
+                'success': False,
+                'message': 'No code found to correct'
+            })
+        
+        # Use Cerebras API to correct the code
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""
+                    You are an expert Python programming instructor. Your task is to analyze and correct student code for a programming exercise.
+
+                    Lesson Context:
+                    - Lesson: {lesson.lesson_name}
+                    - Description: {lesson.lesson_description}
+                    - Details: {lesson.lesson_details}
+                    - Goals: {lesson.lesson_goals}
+
+                    The student has submitted code that may have errors or could be improved. Your task is to:
+                    1. Identify any syntax errors, logical errors, or improvements needed
+                    2. Provide corrected code
+                    3. Explain what was wrong and how you fixed it
+                    4. Suggest improvements or best practices
+                    5. Give an overall PASS/FAIL assessment based on whether the code meets the lesson requirements
+
+                    Return your response as JSON with the following structure:
+                    {{
+                        "pass_fail": "PASS" or "FAIL",
+                        "corrected_code": "the full corrected code",
+                        "explanation": "detailed explanation of changes",
+                        "issues_found": ["list of issues identified"],
+                        "suggestions": ["list of improvement suggestions"],
+                        "grade": "A letter grade (A, B, C, D, F) based on code quality"
+                    }}
+
+                    For PASS/FAIL assessment:
+                    - PASS: Code runs without errors and meets the core lesson objectives
+                    - FAIL: Code has critical errors or doesn't meet basic lesson requirements
+
+                    Be helpful, educational, and encouraging. Focus on teaching the student why the changes are needed.
+                    """,
+                },
+                {
+                    "role": "user",
+                    "content": f"Here is my code for the lesson '{lesson.lesson_name}':\n\n{code_content}"
+                }
+            ],
+            model="qwen-3-coder-480b",
+        )
+
+        response_content = chat_completion.choices[0].message.content
+        
+        try:
+            correction_data = json.loads(response_content.strip())
+        except json.JSONDecodeError:
+            # Try to extract JSON
+            start = response_content.find('{')
+            end = response_content.rfind('}')
+            if start != -1 and end > start:
+                correction_data = json.loads(response_content[start:end+1])
+            else:
+                correction_data = {
+                    "pass_fail": "UNKNOWN",
+                    "corrected_code": response_content,
+                    "explanation": "Code analysis completed",
+                    "issues_found": ["Analysis provided"],
+                    "suggestions": ["Review the corrected code"],
+                    "grade": "N/A"
+                }
+        
+        # Update the file with corrected code
+        if 'corrected_code' in correction_data:
+            with open(main_file_path, 'w', encoding='utf-8') as f:
+                f.write(correction_data['corrected_code'])
+        
+        return JsonResponse({
+            'success': True,
+            'correction': correction_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error processing code correction: {str(e)}'
+        }, status=500)
