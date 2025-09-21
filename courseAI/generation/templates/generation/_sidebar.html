@@ -53,7 +53,7 @@
 <style>
   .layout { 
     display: flex; 
-    min-height: 100vh;
+    height: 100vh; /* ensure full-viewport height */
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
   }
   
@@ -62,11 +62,13 @@
     background: white;
     color: #1f2937; 
     padding: 0;
-    overflow-y: auto;
+    /* Let header and footer be fixed inside, lessons scroll in the middle */
+    height: 100vh;
     border-right: 1px solid #e5e7eb;
     box-shadow: 4px 0 6px -1px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
   
   .sidebar-header { 
@@ -93,7 +95,8 @@
   .chapters { 
     padding: 16px 0;
     flex: 1;
-    overflow-y: auto;
+    overflow-y: auto; /* scroll just the lessons area */
+    min-height: 0;     /* allow proper flexbox scrolling */
   }
   
   .chapter { 
@@ -232,6 +235,8 @@
     padding: 16px;
     border-top: 1px solid #e5e7eb;
     background: #f9fafb;
+    position: sticky;
+    bottom: 0; /* keep footer visible above the fold */
   }
   .complete-indicator {
     margin-left: 8px;
