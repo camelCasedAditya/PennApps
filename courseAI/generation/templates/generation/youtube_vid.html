@@ -1,103 +1,49 @@
 
-{% block content %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Videos - {{ lesson.lesson_name }}</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background-color: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .lesson-info {
-            background-color: #e9ecef;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-        .lesson-info h2 {
-            margin-top: 0;
-            color: #495057;
-        }
-        .youtube-videos {
-            margin-top: 20px;
-        }
-        .youtube-video {
-            margin-bottom: 40px;
-            padding: 20px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            border-left: 4px solid #007bff;
-        }
-        .youtube-video h3 {
-            margin-top: 0;
-            color: #333;
-        }
-        .youtube-video iframe {
-            display: block;
-            margin: 0 auto 15px auto;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-        .back-btn {
-            background-color: #007bff;
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            display: block;
-            margin: 30px auto 0;
-            text-decoration: none;
-            text-align: center;
-            transition: background-color 0.3s;
-        }
-        .back-btn:hover {
-            background-color: #0056b3;
-        }
-    </style>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>YouTube Videos - {{ lesson.lesson_name }}</title>
+        <style>
+            .layout { display: flex; min-height: 100vh; }
+            .content { flex: 1; background: #f8fafc; }
+            .topbar { background: white; border-bottom: 1px solid #e2e8f0; padding: 12px 16px; }
+            .container { max-width: 980px; margin: 0 auto; padding: 20px; }
+            .youtube-video { margin-bottom: 24px; padding: 16px; background: white; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); border-left: 4px solid #0ea5e9; }
+            .back-btn { background-color: #007bff; color: white; padding: 10px 16px; border-radius: 6px; text-decoration: none; display: inline-block; }
+            .back-btn:hover { background-color: #0056b3; }
+        </style>
 </head>
 <body>
-    <div class="container">
-        <div class="lesson-info">
-            <h2>{{ lesson.lesson_name }}</h2>
-            <p>{{ lesson.lesson_description }}</p>
-        </div>
-        <h1>YouTube Video Recommendation</h1>
-        {% if lesson.youtube_videos.all %}
-            <div class="youtube-videos">
-                {% for video in lesson.youtube_videos.all %}
-                    <div class="youtube-video">
-                        <h3>{{ video.title }}</h3>
-                        <iframe width="560" height="315" src="https://www.youtube.com/embed/{{ video.video_id }}" frameborder="0" allowfullscreen></iframe>
-                        <p>{{ video.description }}</p>
-                        <p><strong>Channel:</strong> {{ video.channel_title }}<br>
-                        <strong>Views:</strong> {{ video.raw_data.statistics.viewCount|default:'N/A' }}</p>
-                    </div>
-                {% endfor %}
+    <div class="layout">
+        {% include 'generation/_sidebar.html' %}
+        <div class="content">
+            <div class="topbar">
+                <div class="container">
+                    <h1>YouTube Video Recommendation</h1>
+                    <div>{{ lesson.lesson_name }} — {{ lesson.lesson_description }}</div>
+                </div>
             </div>
-        {% else %}
-            <p>No YouTube videos found for this lesson.</p>
-        {% endif %}
-        <a href="{{ request.META.HTTP_REFERER|default:'#' }}" class="back-btn">Back</a>
+            <div class="container">
+                {% if lesson.youtube_videos.all %}
+                    <div class="youtube-videos">
+                        {% for video in lesson.youtube_videos.all %}
+                            <div class="youtube-video">
+                                <h3>{{ video.title }}</h3>
+                                <iframe width="560" height="315" src="https://www.youtube.com/embed/{{ video.video_id }}" frameborder="0" allowfullscreen></iframe>
+                                <p>{{ video.description }}</p>
+                                <p><strong>Channel:</strong> {{ video.channel_title }}<br>
+                                <strong>Views:</strong> {{ video.raw_data.statistics.viewCount|default:'N/A' }}</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p>No YouTube videos found for this lesson.</p>
+                {% endif %}
+                <a href="{{ request.META.HTTP_REFERER|default:'#' }}" class="back-btn">Back</a>
+            </div>
+        </div>
     </div>
 </body>
 </html>
-{% endblock %}

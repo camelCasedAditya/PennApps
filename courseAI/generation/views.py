@@ -15,6 +15,19 @@ from django.utils import timezone
 from .youtube_utils import generate_youtube_query, search_youtube
 from courses.models import Project, File
 
+# --------------- Sidebar helpers ---------------
+def _sidebar_context_for_lesson(lesson: GeneratedLesson):
+    """Build common context for sidebar navigation given a current lesson."""
+    course = lesson.chapter.course_generation
+    chapters = (GeneratedChapter.objects
+                .filter(course_generation=course)
+                .prefetch_related('lessons', 'lessons__quiz', 'lessons__article', 'lessons__external_article'))
+    return {
+        'course_generation': course,
+        'sidebar_chapters': chapters,
+        'current_lesson_id': lesson.id,
+    }
+
 dotenv.load_dotenv()  # Load environment variables from .env file
 client = Cerebras(
     api_key=os.getenv('CEREBRAS_API_KEY'),
@@ -669,10 +682,13 @@ def take_quiz(request, quiz_id):
     """Display the quiz for the user to take."""
     try:
         quiz = MultipleChoiceQuiz.objects.get(id=quiz_id)
-        return render(request, 'generation/take_quiz.html', {
+        sidebar_ctx = _sidebar_context_for_lesson(quiz.lesson)
+        ctx = {
             'quiz': quiz,
             'questions': quiz.quiz_data.get('questions', [])
-        })
+        }
+        ctx.update(sidebar_ctx)
+        return render(request, 'generation/take_quiz.html', ctx)
     except MultipleChoiceQuiz.DoesNotExist:
         return render(request, 'generation/error.html', {
             'error': 'Quiz not found'
@@ -726,14 +742,16 @@ def submit_quiz(request, quiz_id):
         # Calculate percentage
         percentage = round((correct_count / len(questions)) * 100) if len(questions) > 0 else 0
         
-        return render(request, 'generation/quiz_results.html', {
+        ctx = {
             'quiz': quiz,
             'attempt': attempt,
             'results': results,
             'score': correct_count,
             'total': len(questions),
             'percentage': percentage
-        })
+        }
+        ctx.update(_sidebar_context_for_lesson(quiz.lesson))
+        return render(request, 'generation/quiz_results.html', ctx)
         
     except MultipleChoiceQuiz.DoesNotExist:
         return render(request, 'generation/error.html', {
@@ -874,7 +892,9 @@ def lesson_youtube(request, lesson_id):
     """Display the YouTube video(s) for a lesson."""
     from .models import GeneratedLesson
     lesson = GeneratedLesson.objects.get(id=lesson_id)
-    return render(request, 'generation/youtube_vid.html', {'lesson': lesson})
+    ctx = {'lesson': lesson}
+    ctx.update(_sidebar_context_for_lesson(lesson))
+    return render(request, 'generation/youtube_vid.html', ctx)
 
 def load_lesson_project(request, lesson_id):
     """Load a programming project for a lesson into the code editor."""
@@ -937,6 +957,7 @@ def load_lesson_project(request, lesson_id):
         'project': project,
         'files': files
     }
+    context.update(_sidebar_context_for_lesson(lesson))
     
     return render(request, 'generation/code_editor.html', context)
 
@@ -1045,3 +1066,22 @@ def submit_code_correction(request, lesson_id):
             'success': False,
             'message': f'Error processing code correction: {str(e)}'
         }, status=500)
+
+
+# --------------- Additional lesson pages ---------------
+def lesson_article(request, lesson_id):
+    """Display generated article content for a lesson (art)."""
+    lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
+    article = getattr(lesson, 'article', None)
+    ctx = {'lesson': lesson, 'article': article}
+    ctx.update(_sidebar_context_for_lesson(lesson))
+    return render(request, 'generation/article.html', ctx)
+
+
+def lesson_external(request, lesson_id):
+    """Display an external article link for a lesson (ext)."""
+    lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
+    external = getattr(lesson, 'external_article', None)
+    ctx = {'lesson': lesson, 'external': external}
+    ctx.update(_sidebar_context_for_lesson(lesson))
+    return render(request, 'generation/external_article.html', ctx)

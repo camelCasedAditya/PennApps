@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Course{% endblock %}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 300px;
+            background-color: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .sidebar h2 {
+            margin-top: 0;
+            color: #333;
+            font-size: 18px;
+        }
+        .chapter {
+            margin-bottom: 15px;
+        }
+        .chapter-header {
+            cursor: pointer;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chapter-header:hover {
+            background-color: #dee2e6;
+        }
+        .chapter-title {
+            font-weight: bold;
+            color: #495057;
+        }
+        .chapter-toggle {
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .lessons {
+            margin-top: 10px;
+            display: none;
+        }
+        .lessons.expanded {
+            display: block;
+        }
+        .lesson {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .lesson:hover {
+            background-color: #e9ecef;
+        }
+        .lesson.current {
+            background-color: #007bff;
+            color: white;
+        }
+        .lesson-link {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .lesson-type {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+        .lesson.current .lesson-type {
+            color: #cce5ff;
+        }
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .course-header {
+            background-color: #fff;
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+            margin: -20px -20px 20px -20px;
+        }
+        .course-title {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .course-description {
+            color: #666;
+            margin: 0;
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Course Navigation</h2>
+        {% for chapter in chapters %}
+        <div class="chapter">
+            <div class="chapter-header" onclick="toggleChapter({{ chapter.chapter_number }})">
+                <div class="chapter-title">
+                    Chapter {{ chapter.chapter_number }}: {{ chapter.chapter_name }}
+                </div>
+                <div class="chapter-toggle">▼</div>
+            </div>
+            <div class="lessons" id="chapter-{{ chapter.chapter_number }}">
+                {% for lesson in chapter.lessons %}
+                <div class="lesson {% if lesson.id == current_lesson_id %}current{% endif %}">
+                    {% if lesson.lesson_type == 'vid' %}
+                        <a href="{% url 'generation:lesson_youtube' lesson.id %}" class="lesson-link">
+                    {% elif lesson.lesson_type == 'mcq' %}
+                        {% if lesson.quiz %}
+                            <a href="{% url 'generation:take_quiz' lesson.quiz.id %}" class="lesson-link">
+                        {% else %}
+                            <span class="lesson-link">
+                        {% endif %}
+                    {% elif lesson.lesson_type == 'int' or lesson.lesson_type == 'code' %}
+                        <a href="{% url 'generation:load_lesson_project' lesson.id %}" class="lesson-link">
+                    {% else %}
+                        <span class="lesson-link">
+                    {% endif %}
+                        <div>{{ lesson.lesson_number }}. {{ lesson.lesson_name }}</div>
+                        <div class="lesson-type">{{ lesson.lesson_type|upper }}</div>
+                    {% if lesson.lesson_type == 'vid' or lesson.lesson_type == 'int' or lesson.lesson_type == 'code' or lesson.quiz %}
+                        </a>
+                    {% else %}
+                        </span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        function toggleChapter(chapterNumber) {
+            const lessonsDiv = document.getElementById(`chapter-${chapterNumber}`);
+            const toggle = lessonsDiv.previousElementSibling.querySelector('.chapter-toggle');
+            
+            if (lessonsDiv.classList.contains('expanded')) {
+                lessonsDiv.classList.remove('expanded');
+                toggle.textContent = '▼';
+            } else {
+                lessonsDiv.classList.add('expanded');
+                toggle.textContent = '▲';
+            }
+        }
+
+        // Expand current chapter by default
+        {% if current_chapter_number %}
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleChapter({{ current_chapter_number }});
+        });
+        {% endif %}
+    </script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
