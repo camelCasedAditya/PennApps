@@ -20,6 +20,8 @@ class Project(models.Model):
     # Expected output for terminal matching
     expected_output = models.TextField(blank=True, help_text="Expected terminal output for grading")
     
+    is_final_project = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)

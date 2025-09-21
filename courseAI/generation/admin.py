@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CourseGeneration, GeneratedChapter, GeneratedLesson, LessonType, GenerationLog, MultipleChoiceQuiz, ArticleContent, YouTubeVideo, ExternalArticles
+from .models import CourseGeneration, GeneratedChapter, GeneratedLesson, LessonType, GenerationLog, MultipleChoiceQuiz, ArticleContent, YouTubeVideo, ExternalArticles, TextResponseQuestion, TextResponseSubmission
 
 
 @admin.register(CourseGeneration)
@@ -56,3 +56,30 @@ admin.site.register(MultipleChoiceQuiz)
 admin.site.register(ArticleContent)
 admin.site.register(YouTubeVideo)
 admin.site.register(ExternalArticles)
+
+
+@admin.register(TextResponseQuestion)
+class TextResponseQuestionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'lesson', 'question_number', 'question_preview', 'created_at']
+    list_filter = ['lesson__lesson_type', 'question_number', 'created_at']
+    search_fields = ['question', 'optimal_answer', 'lesson__lesson_name']
+    readonly_fields = ['created_at']
+    ordering = ['lesson__chapter__course_generation', 'lesson__chapter__chapter_number', 'lesson__lesson_number', 'question_number']
+    
+    def question_preview(self, obj):
+        return obj.question[:50] + "..." if len(obj.question) > 50 else obj.question
+    question_preview.short_description = 'Question Preview'
+
+
+@admin.register(TextResponseSubmission)
+class TextResponseSubmissionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'lesson', 'user', 'total_score', 'total_questions', 'submitted_at', 'graded_at']
+    list_filter = ['submitted_at', 'graded_at', 'lesson__lesson_type', 'total_score']
+    search_fields = ['lesson__lesson_name', 'user__username']
+    readonly_fields = ['submitted_at', 'graded_at']
+    ordering = ['-submitted_at']
+    
+    def get_readonly_fields(self, request, obj=None):
+        if obj:  # editing an existing object
+            return self.readonly_fields + ['lesson', 'user', 'user_answers']
+        return self.readonly_fields

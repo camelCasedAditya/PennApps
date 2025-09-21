@@ -30,14 +30,12 @@
         </div>
       </div>
       <div class="container">
-        <div class="card">
           {% if external and external.url %}
-            <p>Read the recommended resource here:</p>
-            <a class="link" href="{{ external.url }}" target="_blank" rel="noopener noreferrer">Open Article</a>
+            <!-- <p>Read the recommended resource here:</p> -->
+            <iframe style="border: none; width: 60vw; height: 100vh;"" src="{{ external.url }}"></iframe>
           {% else %}
             <p>No external article link available yet.</p>
           {% endif %}
-        </div>
       </div>
     </div>
   </div>

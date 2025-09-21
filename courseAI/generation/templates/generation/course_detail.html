@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ course_generation.user_prompt|truncatechars:50 }} - Course Details</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .course-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 15px;
+            line-height: 1.2;
+        }
+
+        .course-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            background: #f7fafc;
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            color: #4a5568;
+        }
+
+        .meta-item .icon {
+            margin-right: 8px;
+            font-size: 1.1rem;
+        }
+
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-completed {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .status-generating {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .status-pending {
+            background: #fef5e7;
+            color: #744210;
+        }
+
+        .progress-section {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #e2e8f0;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #48bb78, #38a169);
+            border-radius: 6px;
+            transition: width 0.3s ease;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #4c51bf;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .chapters-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title .icon {
+            margin-right: 10px;
+            color: #4c51bf;
+        }
+
+        .chapter {
+            background: #f8fafc;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .chapter:hover {
+            border-color: #cbd5e0;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .chapter-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chapter-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .difficulty-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .chapter-content {
+            padding: 20px;
+            display: none;
+        }
+
+        .chapter-content.active {
+            display: block;
+        }
+
+        .chapter-description {
+            color: #4a5568;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .lessons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .lesson-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #4c51bf;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+        }
+
+        .lesson-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .lesson-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .lesson-title {
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 1rem;
+            line-height: 1.3;
+        }
+
+        .lesson-type-badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+            margin-left: 10px;
+        }
+
+        .type-vid { background: #fed7e2; color: #702459; }
+        .type-art { background: #e6fffa; color: #234e52; }
+        .type-mcq { background: #fef5e7; color: #744210; }
+        .type-int { background: #e9f7ef; color: #22543d; }
+        .type-txt { background: #ebf8ff; color: #2a4365; }
+        .type-ext { background: #f0f4f8; color: #2d3748; }
+
+        .lesson-description {
+            color: #718096;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .lesson-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .lesson-link {
+            padding: 6px 12px;
+            background: #4c51bf;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: background 0.2s ease;
+        }
+
+        .lesson-link:hover {
+            background: #434190;
+        }
+
+        .lesson-link.disabled {
+            background: #cbd5e0;
+            color: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        .chevron {
+            transition: transform 0.3s ease;
+            font-size: 1.2rem;
+        }
+
+        .chapter-header.active .chevron {
+            transform: rotate(180deg);
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            color: white;
+            text-decoration: none;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 25px;
+            margin-bottom: 20px;
+            transition: background 0.2s ease;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            color: #cbd5e0;
+        }
+
+        @media (max-width: 768px) {
+            .course-title {
+                font-size: 2rem;
+            }
+
+            .course-meta {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            .lessons-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{% url 'generation:generation_form' %}" class="back-link">
+            <span style="margin-right: 8px;">←</span>
+            Back to Course Generation
+        </a>
+
+        <div class="header">
+            <h1 class="course-title">{{ course_generation.user_prompt }}</h1>
+            
+            <div class="course-meta">
+                <div class="meta-item">
+                    <span class="icon">👤</span>
+                    Experience: {{ course_generation.experience_level }}
+                </div>
+                <div class="meta-item">
+                    <span class="icon">📅</span>
+                    Created: {{ course_generation.created_at|date:"M d, Y" }}
+                </div>
+                {% if course_generation.completed_at %}
+                <div class="meta-item">
+                    <span class="icon">✅</span>
+                    Completed: {{ course_generation.completed_at|date:"M d, Y" }}
+                </div>
+                {% endif %}
+                <div class="status-badge status-{{ course_generation.status }}">
+                    {{ course_generation.get_status_display }}
+                </div>
+            </div>
+
+            <div class="progress-section">
+                <h3>Course Progress</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ completion_percentage }}%"></div>
+                </div>
+                <p style="margin-top: 8px; color: #718096; font-size: 0.9rem;">
+                    {{ completion_percentage }}% Complete
+                </p>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ total_chapters }}</div>
+                <div class="stat-label">Chapters</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ total_lessons }}</div>
+                <div class="stat-label">Lessons</div>
+            </div>
+            {% for lesson_type, count in lesson_type_counts.items %}
+            <div class="stat-card">
+                <div class="stat-number">{{ count }}</div>
+                <div class="stat-label">{{ lesson_type|upper }} Lessons</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="chapters-section">
+            <h2 class="section-title">
+                <span class="icon">📚</span>
+                Course Chapters
+            </h2>
+
+            {% if chapters %}
+                {% for chapter in chapters %}
+                <div class="chapter">
+                    <div class="chapter-header" onclick="toggleChapter({{ chapter.id }})">
+                        <div>
+                            <div class="chapter-title">
+                                Chapter {{ chapter.chapter_number }}: {{ chapter.chapter_name }}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="difficulty-badge">
+                                Difficulty: {{ chapter.difficulty_rating }}/10
+                            </div>
+                            <span class="chevron">▼</span>
+                        </div>
+                    </div>
+                    
+                    <div class="chapter-content" id="chapter-{{ chapter.id }}">
+                        <p class="chapter-description">{{ chapter.chapter_description }}</p>
+                        
+                        <h4 style="margin-bottom: 15px; color: #4a5568;">
+                            Lessons ({{ chapter.lessons.count }})
+                        </h4>
+                        
+                        {% if chapter.lessons.all %}
+                        <div class="lessons-grid">
+                            {% for lesson in chapter.lessons.all %}
+                            <div class="lesson-card">
+                                <div class="lesson-header">
+                                    <div class="lesson-title">
+                                        L{{ lesson.lesson_number }}: {{ lesson.lesson_name }}
+                                    </div>
+                                    <div class="lesson-type-badge type-{{ lesson.lesson_type }}">
+                                        {{ lesson.lesson_type }}
+                                    </div>
+                                </div>
+                                
+                                <p class="lesson-description">
+                                    {{ lesson.lesson_description|truncatechars:120 }}
+                                </p>
+                                
+                                <div class="lesson-actions">
+                                    {% if lesson.lesson_type == 'vid' %}
+                                        <a href="{% url 'generation:lesson_youtube' lesson.id %}" class="lesson-link">
+                                            🎬 Watch Video
+                                        </a>
+                                    {% elif lesson.lesson_type == 'int' or lesson.lesson_type == 'code' %}
+                                        <a href="{% url 'generation:load_lesson_project' lesson.id %}" class="lesson-link">
+                                            💻 Start Coding
+                                        </a>
+                                    {% elif lesson.lesson_type == 'mcq' and lesson.quiz %}
+                                        <a href="{% url 'generation:take_quiz' lesson.quiz.id %}" class="lesson-link">
+                                            📝 Take Quiz
+                                        </a>
+                                    {% elif lesson.lesson_type == 'art' and lesson.article %}
+                                        <a href="{% url 'generation:lesson_article' lesson.id %}" class="lesson-link">
+                                            📖 Read Article
+                                        </a>
+                                    {% elif lesson.lesson_type == 'ext' and lesson.external_article %}
+                                        <a href="{% url 'generation:lesson_external' lesson.id %}" class="lesson-link">
+                                            🔗 External Resource
+                                        </a>
+                                    {% elif lesson.lesson_type == 'txt' %}
+                                        <a href="{% url 'generation:lesson_text_response' lesson.id %}" class="lesson-link">
+                                            ✍️ Answer Questions
+                                        </a>
+                                    {% else %}
+                                        <span class="lesson-link disabled">Not Available Yet</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="empty-state">
+                            <div class="icon">📝</div>
+                            <p>No lessons available for this chapter yet.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <div class="icon">📚</div>
+                    <p>No chapters have been generated for this course yet.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function toggleChapter(chapterId) {
+            const content = document.getElementById(`chapter-${chapterId}`);
+            const headerElements = document.querySelectorAll('.chapter-header');
+            
+            // Find the correct header element
+            let header = null;
+            headerElements.forEach(h => {
+                if (h.onclick.toString().includes(`toggleChapter(${chapterId})`)) {
+                    header = h;
+                }
+            });
+            
+            if (content && header) {
+                content.classList.toggle('active');
+                header.classList.toggle('active');
+            }
+        }
+
+        // Auto-expand first chapter
+        document.addEventListener('DOMContentLoaded', function() {
+            const firstChapter = document.querySelector('.chapter-content');
+            const firstHeader = document.querySelector('.chapter-header');
+            if (firstChapter && firstHeader) {
+                firstChapter.classList.add('active');
+                firstHeader.classList.add('active');
+            }
+        });
+    </script>
+</body>
+</html>

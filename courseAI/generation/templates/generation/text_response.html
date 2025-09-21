@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Text Response - {{ lesson.lesson_name }}</title>
+  <style>
+    .layout { display: flex; min-height: 100vh; }
+    .content { flex: 1; background: #f8fafc; }
+    .topbar { background: white; border-bottom: 1px solid #e2e8f0; padding: 12px 16px; }
+    .container { max-width: 980px; margin: 0 auto; padding: 20px; }
+    .lesson-header h1 { margin: 10px 0 6px; }
+    .lesson-desc { color: #475569; }
+    
+    .questions-container { 
+      background: white; 
+      padding: 30px; 
+      border-radius: 8px; 
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04); 
+      margin-bottom: 20px;
+    }
+    
+    .question-item {
+      margin-bottom: 30px;
+      padding: 20px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      background: #f8fafc;
+    }
+    
+    .question-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    
+    .question-number {
+      background: #4299e1;
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+      margin-right: 12px;
+    }
+    
+    .question-text {
+      font-size: 18px;
+      font-weight: 500;
+      color: #2d3748;
+      line-height: 1.5;
+    }
+    
+    .answer-section {
+      margin-top: 15px;
+    }
+    
+    .answer-label {
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 8px;
+      display: block;
+    }
+    
+    .answer-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border: 1px solid #cbd5e0;
+      border-radius: 4px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+    
+    .answer-textarea:focus {
+      outline: none;
+      border-color: #4299e1;
+      box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+    }
+    
+    .optimal-answer-section {
+      margin-top: 15px;
+      padding: 15px;
+      background: #e6fffa;
+      border: 1px solid #81e6d9;
+      border-radius: 4px;
+    }
+    
+    .optimal-answer-label {
+      font-weight: 600;
+      color: #2c7a7b;
+      margin-bottom: 8px;
+      display: block;
+    }
+    
+    .optimal-answer-text {
+      color: #2d3748;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    
+    .show-answer-btn {
+      background: #38b2ac;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    
+    .show-answer-btn:hover {
+      background: #319795;
+    }
+    
+    .submit-btn {
+      background: #4299e1;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 20px 0;
+      width: 100%;
+    }
+    
+    .submit-btn:hover {
+      background: #3182ce;
+    }
+    
+    .submit-btn:disabled {
+      background: #a0aec0;
+      cursor: not-allowed;
+    }
+    
+    .grade-section {
+      margin-top: 15px;
+      padding: 15px;
+      background: #f0fff4;
+      border: 1px solid #9ae6b4;
+      border-radius: 4px;
+      display: none;
+    }
+    
+    .grade-header {
+      font-weight: 600;
+      color: #22543d;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: between;
+      align-items: center;
+    }
+    
+    .grade-score {
+      font-size: 18px;
+      font-weight: bold;
+      color: #22543d;
+    }
+    
+    .grade-feedback {
+      color: #2d3748;
+      line-height: 1.6;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    
+    .grade-details {
+      font-size: 13px;
+      color: #4a5568;
+    }
+    
+    .grade-details strong {
+      color: #22543d;
+    }
+    
+    .loading-message {
+      text-align: center;
+      padding: 20px;
+      color: #4a5568;
+      display: none;
+    }
+    
+    .error-message {
+      background: #fed7d7;
+      border: 1px solid #fc8181;
+      color: #742a2a;
+      padding: 12px;
+      border-radius: 4px;
+      margin: 10px 0;
+      display: none;
+    }
+    
+    .success-message {
+      background: #c6f6d5;
+      border: 1px solid #9ae6b4;
+      color: #22543d;
+      padding: 12px;
+      border-radius: 4px;
+      margin: 10px 0;
+      display: none;
+    }
+    
+    .eyebrow {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #4299e1;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    {% include 'generation/_sidebar.html' %}
+    <div class="content">
+      <div class="topbar">
+        <div class="container">
+          <div class="lesson-header">
+            <div class="eyebrow">Text Response Questions</div>
+            <h1>{{ lesson.lesson_name }}</h1>
+            <div class="lesson-desc">{{ lesson.lesson_description }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="container">
+        {% if questions %}
+          <form id="text-response-form">
+            <div class="questions-container">
+              <h2 style="margin-top: 0; margin-bottom: 25px; color: #2d3748;">Practice Questions</h2>
+              <p style="color: #4a5568; margin-bottom: 30px;">
+                Answer the following questions based on the lesson content. Take your time to provide thoughtful responses.
+              </p>
+              
+              <div class="error-message" id="error-message"></div>
+              <div class="success-message" id="success-message"></div>
+              <div class="loading-message" id="loading-message">
+                <p>Grading your responses with AI... Please wait.</p>
+              </div>
+              
+              {% for question in questions %}
+              <div class="question-item">
+                <div class="question-header">
+                  <div class="question-number">{{ question.question_number }}</div>
+                  <div class="question-text">{{ question.question }}</div>
+                </div>
+                
+                <div class="answer-section">
+                  <label class="answer-label" for="answer-{{ question.question_number }}">Your Answer:</label>
+                  <textarea 
+                    id="answer-{{ question.question_number }}" 
+                    name="answer-{{ question.question_number }}"
+                    class="answer-textarea" 
+                    placeholder="Type your answer here..."
+                    required>
+                  </textarea>
+                </div>
+                
+                <div id="grade-{{ question.question_number }}" class="grade-section">
+                  <div class="grade-header">
+                    <span>Grade for Question {{ question.question_number }}:</span>
+                    <span class="grade-score" id="score-{{ question.question_number }}"></span>
+                  </div>
+                  <div class="grade-feedback" id="feedback-{{ question.question_number }}"></div>
+                  <div class="grade-details" id="details-{{ question.question_number }}"></div>
+                </div>
+              </div>
+              {% endfor %}
+              
+              <button type="submit" class="submit-btn" id="submit-btn">
+                Submit Answers for Grading
+              </button>
+            </div>
+          </form>
+        {% else %}
+          <div class="questions-container">
+            <h2 style="margin-top: 0; color: #2d3748;">No Questions Available</h2>
+            <p style="color: #4a5568;">Questions for this lesson are being generated. Please try again later.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('text-response-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const submitBtn = document.getElementById('submit-btn');
+      const loadingMessage = document.getElementById('loading-message');
+      const errorMessage = document.getElementById('error-message');
+      const successMessage = document.getElementById('success-message');
+      
+      // Reset messages
+      errorMessage.style.display = 'none';
+      successMessage.style.display = 'none';
+      
+      // Collect answers
+      const formData = new FormData(this);
+      const answers = {};
+      let hasAnswers = false;
+      
+      for (let [key, value] of formData.entries()) {
+        if (key.startsWith('answer-') && value.trim()) {
+          const questionNum = key.replace('answer-', '');
+          answers[questionNum] = value.trim();
+          hasAnswers = true;
+        }
+      }
+      
+      if (!hasAnswers) {
+        errorMessage.textContent = 'Please provide at least one answer before submitting.';
+        errorMessage.style.display = 'block';
+        return;
+      }
+      
+      // Show loading state
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Grading...';
+      loadingMessage.style.display = 'block';
+      
+      try {
+        const response = await fetch(`/generation/lesson/{{ lesson.id }}/text/submit/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+          },
+          body: JSON.stringify({ answers: answers })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // Display grades
+          displayGrades(result.grades);
+          successMessage.textContent = result.message;
+          successMessage.style.display = 'block';
+          submitBtn.textContent = 'Submitted Successfully';
+        } else {
+          errorMessage.textContent = result.message || 'An error occurred while grading.';
+          errorMessage.style.display = 'block';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit Answers for Grading';
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        errorMessage.textContent = 'Network error. Please try again.';
+        errorMessage.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Answers for Grading';
+      }
+      
+      loadingMessage.style.display = 'none';
+    });
+    
+    function displayGrades(gradesData) {
+      const grades = gradesData.grades || [];
+      
+      grades.forEach(grade => {
+        const gradeSection = document.getElementById(`grade-${grade.question_number}`);
+        const scoreElement = document.getElementById(`score-${grade.question_number}`);
+        const feedbackElement = document.getElementById(`feedback-${grade.question_number}`);
+        const detailsElement = document.getElementById(`details-${grade.question_number}`);
+        
+        if (gradeSection && scoreElement && feedbackElement && detailsElement) {
+          scoreElement.textContent = `${grade.score}/100`;
+          feedbackElement.textContent = grade.feedback || 'No feedback provided.';
+          
+          let detailsHtml = '';
+          if (grade.strengths && grade.strengths.length > 0) {
+            detailsHtml += `<strong>Strengths:</strong> ${grade.strengths.join(', ')}<br>`;
+          }
+          if (grade.improvements && grade.improvements.length > 0) {
+            detailsHtml += `<strong>Areas for improvement:</strong> ${grade.improvements.join(', ')}`;
+          }
+          detailsElement.innerHTML = detailsHtml;
+          
+          gradeSection.style.display = 'block';
+        }
+      });
+      
+      // Show overall score if available
+      if (gradesData.overall_score !== undefined) {
+        const overallMessage = document.getElementById('success-message');
+        overallMessage.innerHTML = `
+          <strong>Overall Score: ${gradesData.overall_score.toFixed(1)}/100</strong><br>
+          ${gradesData.overall_feedback || 'Great job on completing the questions!'}
+        `;
+      }
+    }
+    
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+  </script>
+</body>
+</html>

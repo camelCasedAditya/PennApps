@@ -9,7 +9,10 @@ from pinecone import Pinecone
 from tavily import TavilyClient
 import dotenv  
 import os
-from .models import CourseGeneration, GeneratedChapter, GeneratedLesson, LessonType, GenerationLog, MultipleChoiceQuiz, QuizAttempt, QuizAttempt, ArticleContent, YouTubeVideo, ExternalArticles
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import traceback
+from .models import CourseGeneration, GeneratedChapter, GeneratedLesson, LessonType, GenerationLog, MultipleChoiceQuiz, QuizAttempt, QuizAttempt, ArticleContent, YouTubeVideo, ExternalArticles, TextResponseQuestion, TextResponseSubmission
 from django.db import transaction
 from django.utils import timezone
 from .youtube_utils import generate_youtube_query, search_youtube
@@ -34,60 +37,93 @@ client = Cerebras(
     max_retries=5
 )
 
+second_client = Cerebras(
+    api_key=os.getenv('SECOND_CEREBRAS_API_KEY'),
+    max_retries=5
+)
+
 
 def generation_form(request):
     """Display the course generation form."""
-    return render(request, 'generation/form.html')
+    # Get recent course generations to display
+    recent_courses = CourseGeneration.objects.filter(
+        status='completed'
+    ).order_by('-completed_at')[:5]
+    
+    context = {
+        'recent_courses': recent_courses
+    }
+    return render(request, 'generation/form.html', context)
 
 
 def chapter_list_create(input_prompt, exp):
-    """Generate chapter list using Cerebras API."""
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {
-                "role": "system",
-                "content": f"""
-                    You are an expert learning strategist and educational content designer. Your task is to help a user break down a massive project into a structured learning plan.
+    """Generate chapter list using Cerebras API with fallback to secondary client."""
+    messages = [
+        {
+            "role": "system",
+            "content": f"""
+                You are an expert learning strategist and educational content designer. Your task is to help a user break down a massive project into a structured learning plan.
 
-                    Input: 
-                    - The user will provide a single sentence describing a large, complex project they want to complete.
-                    - This is the experience the following user has with the project: {exp}
+                Input: 
+                - The user will provide a single sentence describing a large, complex project they want to complete.
+                - This is the experience the following user has with the project: {exp}
 
-                    Task: 
-                    1. Analyze the project and determine all the key areas, topics, or skills that the user will need to learn in order to successfully complete the project.
-                    2. Break these areas down into sequential "chapters" or learning modules.
-                    3. For each chapter, provide:
-                    - A chapter number (starting from 1)
-                    - A descriptive chapter name
-                    - A brief description explaining what the chapter covers
-                    - A difficulty rating from 1 to 10, indicating how challenging this chapter is to learn
+                Task: 
+                1. Analyze the project and determine all the key areas, topics, or skills that the user will need to learn in order to successfully complete the project.
+                2. Break these areas down into sequential "chapters" or learning modules.
+                3. For each chapter, provide:
+                - A chapter number (starting from 1)
+                - A descriptive chapter name
+                - A brief description explaining what the chapter covers
+                - A difficulty rating from 1 to 10, indicating how challenging this chapter is to learn
 
-                    Output: Provide the results as a JSON array with the following structure:
+                Output: Provide the results as a JSON array with the following structure:
 
-                    [
-                    {{
-                        "chapter_number": "",
-                        "chapter_name": "",
-                        "chapter_description": "",
-                        "chapter_difficulty": ""
-                    }},
-                    ...
-                    ]
+                [
+                {{
+                    "chapter_number": "",
+                    "chapter_name": "",
+                    "chapter_description": "",
+                    "chapter_difficulty": ""
+                }},
+                ...
+                ]
 
-                    Make sure the chapters are logically ordered so that mastering one chapter naturally prepares the learner for the next. Focus on completeness and clarity, 
-                    covering all areas necessary to achieve the project goal. Use concise, clear language for the descriptions. Make sure that the chapters are very extensive. It is better to have too much than too little.
-                    The maximum number of chapters is 5.
-                    
-                    Do not include any additional commentary or explanation outside of the JSON array.
-                    """,
-            },
-            {
-                "role": "user",
-                "content": input_prompt,
-            }
-        ],
-        model="qwen-3-coder-480b",
-    )
+                Make sure the chapters are logically ordered so that mastering one chapter naturally prepares the learner for the next. Focus on completeness and clarity, 
+                covering all areas necessary to achieve the project goal. Use concise, clear language for the descriptions. Make sure that the chapters are very extensive. It is better to have too much than too little.
+                The maximum number of chapters is 5.
+                
+                Do not include any additional commentary or explanation outside of the JSON array.
+                """,
+        },
+        {
+            "role": "user",
+            "content": input_prompt,
+        }
+    ]
+    
+    # Try primary client first
+    try:
+        print("🔄 Attempting chapter generation with primary Cerebras client...")
+        chat_completion = client.chat.completions.create(
+            messages=messages,
+            model="qwen-3-coder-480b",
+        )
+        response_content = chat_completion.choices[0].message.content
+        print("✅ Primary client succeeded for chapter generation")
+    except Exception as e:
+        print(f"❌ Primary client failed for chapter generation: {str(e)}")
+        try:
+            print("🔄 Retrying with secondary Cerebras client...")
+            chat_completion = second_client.chat.completions.create(
+                messages=messages,
+                model="qwen-3-coder-480b",
+            )
+            response_content = chat_completion.choices[0].message.content
+            print("✅ Secondary client succeeded for chapter generation")
+        except Exception as e2:
+            print(f"❌ Secondary client also failed for chapter generation: {str(e2)}")
+            raise Exception(f"Both Cerebras clients failed for chapter generation. Primary: {str(e)}, Secondary: {str(e2)}")
 
     response_content = chat_completion.choices[0].message.content
     try:
@@ -166,14 +202,11 @@ def create_lesson(chapter_item, course_structure, prompt):
                         Video - Name: vid, ID: 1,
                         AI generated articles- Name: art , ID: 2,
                         External Article Reading- Name: ext , ID: 3,
-                        Conclusion and Summary* (should only be the last lesson in chapter) - Name: sum, ID: 4,
 
                         Practice Lessons:
                         Interactive programming exercise - Name: int , ID: 5,
                         Multiple choice quiz - Name: mcq , ID: 6,
                         text response - Name: txt , ID: 7,
-                        fill in the blank - Name: fib , ID: 8,
-                        final project* (only at the end if there is enough learned) - Name: pro , ID: 9,
 
                         7. DO NOT RETURN ANYTHING OTHER THAN THE JSON. NO EXPLANATIONS, NO EXTRA TEXT. ONLY THE RAW JSON.
                         """,
@@ -455,6 +488,448 @@ def generate_quiz(lesson):
     
     return quiz
 
+def process_single_chapter(chapter, chapter_item, course_structure_text, user_text, course_generation):
+    """Process a single chapter in parallel - generate lessons and content."""
+    chapter_lessons_count = 0
+    chapter_result = {
+        'chapter_number': chapter.chapter_number,
+        'lesson_plan': None,
+        'lessons_count': 0,
+        'error': None
+    }
+    
+    try:
+        print(f"🔄 Generating lessons for Chapter {chapter.chapter_number}...")
+        
+        GenerationLog.objects.create(
+            course_generation=course_generation,
+            step=f"lesson_generation_chapter_{chapter.chapter_number}",
+            status="in_progress",
+            message=f"Generating lessons for Chapter {chapter.chapter_number}"
+        )
+        
+        # Generate lesson plan
+        lesson_plan = create_lesson(chapter_item, course_structure_text, user_text)
+        chapter_result['lesson_plan'] = lesson_plan
+        
+        # Save lessons to database
+        with transaction.atomic():
+            for lesson_data in lesson_plan:
+                GeneratedLesson.objects.create(
+                    chapter=chapter,
+                    lesson_number=int(lesson_data.get("lesson_number", 1)),
+                    lesson_type=lesson_data.get("lesson_type", ""),
+                    lesson_type_id=lesson_data.get("lesson_type_ID"),
+                    lesson_name=lesson_data.get("lesson_name", ""),
+                    lesson_description=lesson_data.get("lesson_description", ""),
+                    lesson_details=lesson_data.get("lesson_details", ""),
+                    lesson_goals=lesson_data.get("lesson_goals", ""),
+                    lesson_guidelines=lesson_data.get("lesson_guidlines", "")
+                )
+                chapter_lessons_count += 1
+            
+            GenerationLog.objects.create(
+                course_generation=course_generation,
+                step=f"lesson_generation_chapter_{chapter.chapter_number}",
+                status="completed",
+                message=f"Generated {len(lesson_plan)} lessons for Chapter {chapter.chapter_number}"
+            )
+        
+        # Process each lesson type
+        lessons = GeneratedLesson.objects.filter(chapter=chapter)
+        for lesson in lessons:
+            print(f"🔍 Processing lesson {lesson.lesson_number} with type: '{lesson.lesson_type}' in Chapter {chapter.chapter_number}")
+            try:
+                if lesson.lesson_type == 'mcq':
+                    quiz = generate_quiz(lesson)
+                    print(f"✅ Generated quiz for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}, Quiz ID: {quiz.id}")
+                elif lesson.lesson_type == "int":
+                    generate_programming_exercise(lesson)
+                    print(f"✅ Generated programming exercise for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}")
+                elif lesson.lesson_type == "vid":
+                    search_youtube_for_lesson(lesson)  
+                    print(f"✅ Prepared YouTube search for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}")
+                elif lesson.lesson_type == "txt":
+                    generate_text_response_questions(lesson)
+                    print(f"✅ Generated text response questions for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}")
+                elif lesson.lesson_type == "ext":
+                    print(f"🔍 Found EXT lesson type! Processing external article for lesson {lesson.lesson_number}")
+                    source = get_best_source(f"{lesson.lesson_name}. {lesson.lesson_description} {lesson.lesson_details}")
+                    if source and source.get('url'):
+                        ExternalArticles.objects.create(
+                            lesson=lesson,
+                            url=source['url']
+                        )
+                        print(f"✅ Saved external article URL for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}: {source['url']}")
+                    else:
+                        print(f"⚠️ No suitable external article found for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}")
+                elif lesson.lesson_type == "art":
+                    article = ai_gen_article(lesson)
+                    ArticleContent.objects.create(
+                        lesson=lesson,
+                        content=article
+                    )
+                    print(f"✅ Generated article for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}")
+            except Exception as lesson_error:
+                print(f"❌ Error processing lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}: {str(lesson_error)}")
+                # Continue processing other lessons even if one fails
+        
+        chapter_result['lessons_count'] = chapter_lessons_count
+        print(f"✅ Completed processing Chapter {chapter.chapter_number} with {chapter_lessons_count} lessons")
+        
+    except Exception as e:
+        print(f"❌ Error processing Chapter {chapter.chapter_number}: {str(e)}")
+        traceback.print_exc()
+        chapter_result['error'] = str(e)
+        
+        # Log the error
+        try:
+            GenerationLog.objects.create(
+                course_generation=course_generation,
+                step=f"lesson_generation_chapter_{chapter.chapter_number}",
+                status="failed",
+                level="error",
+                message=f"Failed to generate lessons for Chapter {chapter.chapter_number}: {str(e)}"
+            )
+        except Exception as log_error:
+            print(f"❌ Failed to log error for Chapter {chapter.chapter_number}: {str(log_error)}")
+    
+    return chapter_result
+
+def create_final_project_chapter(course_generation, user_prompt, chapter_number):
+    """Create a final project chapter with one interactive programming exercise lesson."""
+    try:
+        print(f"🔄 Creating final project chapter {chapter_number}...")
+        
+        # Create the final project chapter
+        final_chapter = GeneratedChapter.objects.create(
+            course_generation=course_generation,
+            chapter_number=chapter_number,
+            chapter_name="Final Project",
+            chapter_description=f"Comprehensive project that applies all concepts learned throughout the course to build: {user_prompt}",
+            difficulty_rating=10  # Maximum difficulty as it's the final project
+        )
+        
+        GenerationLog.objects.create(
+            course_generation=course_generation,
+            step=f"final_project_chapter_{chapter_number}",
+            status="in_progress",
+            message=f"Creating final project chapter {chapter_number}"
+        )
+        
+        # Generate a comprehensive programming exercise using AI
+        lesson_content = generate_final_project_lesson_content(user_prompt)
+        
+        # Create the interactive programming exercise lesson
+        final_lesson = GeneratedLesson.objects.create(
+            chapter=final_chapter,
+            lesson_number=1,
+            lesson_type="int",  # Interactive programming exercise
+            lesson_type_id=5,
+            lesson_name=f"Build Your Own: {user_prompt.split()[0:5]}...",  # First 5 words + ellipsis
+            lesson_description=f"Create a complete implementation of: {user_prompt}",
+            lesson_details=lesson_content['details'],
+            lesson_goals=lesson_content['goals'],
+            lesson_guidelines=lesson_content['guidelines']
+        )
+        
+        # Generate the programming exercise for this lesson
+        project = generate_comprehensive_final_project(final_lesson, user_prompt)
+        
+        GenerationLog.objects.create(
+            course_generation=course_generation,
+            step=f"final_project_chapter_{chapter_number}",
+            status="completed",
+            message=f"Created final project chapter {chapter_number} with comprehensive programming exercise"
+        )
+        
+        # Create lesson plan format for consistency
+        lesson_plan = [{
+            "lesson_number": 1,
+            "lesson_type": "int",
+            "lesson_type_ID": 5,
+            "lesson_name": final_lesson.lesson_name,
+            "lesson_description": final_lesson.lesson_description,
+            "lesson_details": final_lesson.lesson_details,
+            "lesson_goals": final_lesson.lesson_goals,
+            "lesson_guidlines": final_lesson.lesson_guidelines
+        }]
+        
+        print(f"✅ Successfully created final project chapter {chapter_number}")
+        
+        return {
+            'success': True,
+            'chapter_number': chapter_number,
+            'lesson_plan': lesson_plan,
+            'lessons_count': 1,
+            'error': None
+        }
+        
+    except Exception as e:
+        print(f"❌ Error creating final project chapter: {str(e)}")
+        traceback.print_exc()
+        
+        try:
+            GenerationLog.objects.create(
+                course_generation=course_generation,
+                step=f"final_project_chapter_{chapter_number}",
+                status="failed",
+                level="error",
+                message=f"Failed to create final project chapter: {str(e)}"
+            )
+        except Exception as log_error:
+            print(f"❌ Failed to log error for final project chapter: {str(log_error)}")
+        
+        return {
+            'success': False,
+            'chapter_number': chapter_number,
+            'lesson_plan': None,
+            'lessons_count': 0,
+            'error': str(e)
+        }
+
+def generate_final_project_lesson_content(user_prompt):
+    """Generate detailed lesson content for the final project using AI."""
+    messages = [
+        {
+            "role": "system",
+            "content": """
+                You are an expert curriculum designer creating a comprehensive final project lesson.
+                Your task is to create detailed lesson content for a capstone programming project that synthesizes 
+                all the concepts a student has learned throughout their course.
+
+                The final project should be:
+                - Comprehensive and challenging
+                - Practical and applicable to real-world scenarios
+                - Allow students to showcase their complete understanding
+                - Include multiple components and features
+                - Be ambitious but achievable
+
+                Return your response as JSON with the following structure:
+                {
+                    "details": "Comprehensive explanation of what the final project entails, including all major components, features, and technical requirements. This should be detailed enough for a student to understand the full scope.",
+                    "goals": "Clear learning objectives and outcomes. What skills and knowledge will students demonstrate? What will they have accomplished upon completion?",
+                    "guidelines": "Step-by-step breakdown of how to approach this project. Include phases, milestones, and key considerations for successful completion."
+                }
+
+                Make this substantial - this is the culmination of their entire learning journey.
+                DO NOT include any additional text outside the JSON.
+                """,
+        },
+        {
+            "role": "user",
+            "content": f"""
+                Create a comprehensive final project lesson for a student who wants to learn how to: {user_prompt}
+                
+                This should be the capstone project that brings together everything they've learned throughout the course.
+                Make it challenging, practical, and comprehensive.
+                """,
+        }
+    ]
+    
+    # Try primary client first
+    try:
+        print("🔄 Generating final project lesson content with primary Cerebras client...")
+        chat_completion = client.chat.completions.create(
+            messages=messages,
+            model="qwen-3-coder-480b",
+        )
+        print("✅ Primary client succeeded for final project lesson content")
+    except Exception as e:
+        print(f"❌ Primary client failed for final project lesson content: {str(e)}")
+        try:
+            print("🔄 Retrying final project lesson content with secondary Cerebras client...")
+            chat_completion = second_client.chat.completions.create(
+                messages=messages,
+                model="qwen-3-coder-480b",
+            )
+            print("✅ Secondary client succeeded for final project lesson content")
+        except Exception as e2:
+            print(f"❌ Secondary client also failed for final project lesson content: {str(e2)}")
+            # Provide fallback content
+            return {
+                'details': f"Create a comprehensive implementation of: {user_prompt}. This final project should demonstrate mastery of all concepts learned throughout the course, including proper code structure, error handling, user interface design, and real-world applicability.",
+                'goals': "Demonstrate complete understanding and application of all course concepts; Create a fully functional, production-ready implementation; Showcase problem-solving and software design skills",
+                'guidelines': "1. Plan your project architecture and design; 2. Implement core functionality step by step; 3. Add advanced features and optimizations; 4. Test thoroughly and handle edge cases; 5. Document your code and create user instructions; 6. Prepare a presentation of your final work"
+            }
+    
+    try:
+        response_content = chat_completion.choices[0].message.content.strip()
+        lesson_content = json.loads(response_content)
+        return lesson_content
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error in final project lesson content: {e}")
+        # Try to extract JSON
+        start = response_content.find('{')
+        end = response_content.rfind('}')
+        if start != -1 and end > start:
+            try:
+                lesson_content = json.loads(response_content[start:end+1])
+                return lesson_content
+            except json.JSONDecodeError:
+                pass
+        
+        # Fallback content if JSON parsing fails
+        return {
+            'details': f"Create a comprehensive implementation of: {user_prompt}. This final project should demonstrate mastery of all concepts learned throughout the course.",
+            'goals': "Demonstrate complete understanding and application of all course concepts",
+            'guidelines': "Plan, implement, test, and document your complete solution step by step"
+        }
+
+def generate_comprehensive_final_project(lesson, user_prompt):
+    """Generate a comprehensive programming project for the final lesson."""
+    messages = [
+        {
+            "role": "system",
+            "content": """
+                You are an expert programming instructor creating a comprehensive final project.
+                This should be a substantial, multi-file programming project that serves as the capstone 
+                of the student's learning journey.
+
+                Create a comprehensive project that includes:
+                - Multiple interconnected files and modules
+                - Complex functionality that showcases various programming concepts
+                - Proper code structure and organization
+                - Advanced features beyond basic implementation
+                - Starter code that provides structure but requires significant implementation
+
+                The project should be ambitious and comprehensive - this is their final demonstration of mastery.
+
+                Output format: Return ONLY valid JSON in the following structure:
+                {
+                    "starter_files": {
+                        "main.py": "# Main application entry point\\n# TODO: Implement main functionality",
+                    },
+                    "grading_method": "ai_review",
+                    "expected_output": ""
+                }
+
+                Include at least 4-6 files with meaningful starter code and clear TODO instructions.
+                Focus on proper software architecture and real-world applicability.
+                DO NOT include any additional text outside the JSON.
+                """,
+        },
+        {
+            "role": "user",
+            "content": f"""
+                Create a comprehensive final project for: {user_prompt}
+                
+                Lesson Details: {lesson.lesson_details}
+                Lesson Goals: {lesson.lesson_goals}
+                
+                This should be the most substantial and comprehensive project in the entire course.
+                Include multiple files, advanced features, and demonstrate mastery of all concepts.
+                """,
+        }
+    ]
+    
+    # Try primary client first
+    try:
+        print(f"🔄 Generating comprehensive final project with primary Cerebras client...")
+        chat_completion = client.chat.completions.create(
+            messages=messages,
+            model="qwen-3-coder-480b",
+        )
+        print(f"✅ Primary client succeeded for comprehensive final project")
+    except Exception as e:
+        print(f"❌ Primary client failed for comprehensive final project: {str(e)}")
+        try:
+            print(f"🔄 Retrying comprehensive final project with secondary Cerebras client...")
+            chat_completion = second_client.chat.completions.create(
+                messages=messages,
+                model="qwen-3-coder-480b",
+            )
+            print(f"✅ Secondary client succeeded for comprehensive final project")
+        except Exception as e2:
+            print(f"❌ Secondary client also failed for comprehensive final project: {str(e2)}")
+            # Create fallback project structure
+            project_data = {
+                "starter_files": {
+                    "main.py": f"# Final Project: {user_prompt}\n# TODO: Implement the main functionality\n\ndef main():\n    # Your implementation here\n    pass\n\nif __name__ == '__main__':\n    main()",
+                    "README.md": f"# Final Project: {user_prompt}\n\n## Description\nTODO: Describe your project\n\n## Requirements\nTODO: List requirements\n\n## Usage\nTODO: Explain how to use your project"
+                },
+                "grading_method": "ai_review",
+                "expected_output": ""
+            }
+            
+            # Create the Project object with fallback data
+            project = Project.objects.create(
+                lesson=lesson,
+                name=f"Final Project: {user_prompt[:50]}...",
+                description=f"Comprehensive final project: {lesson.lesson_description}",
+                grading_method=project_data.get('grading_method', 'ai_review'),
+                expected_output=project_data.get('expected_output', ''),
+                is_final_project=True
+            )
+            
+            # Create File objects for starter files
+            starter_files = project_data.get('starter_files', {})
+            for filename, content in starter_files.items():
+                File.objects.create(
+                    project=project,
+                    name=filename,
+                    relative_path=filename,
+                    content=content
+                )
+            
+            print(f"✅ Created fallback comprehensive final project with {len(starter_files)} starter files")
+            return project
+
+    try:
+        response_content = chat_completion.choices[0].message.content.strip()
+        project_data = json.loads(response_content)
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error in comprehensive final project: {e}")
+        # Try to extract JSON between first { and last }
+        start = response_content.find('{')
+        end = response_content.rfind('}')
+        if start != -1 and end > start:
+            try:
+                project_data = json.loads(response_content[start:end+1])
+            except json.JSONDecodeError:
+                # Use fallback data
+                project_data = {
+                    "starter_files": {
+                        "main.py": f"# Final Project: {user_prompt}\n# TODO: Implement the main functionality",
+                        "README.md": f"# Final Project: {user_prompt}\n\n## Description\nComprehensive final project"
+                    },
+                    "grading_method": "ai_review",
+                    "expected_output": ""
+                }
+        else:
+            # Use fallback data
+            project_data = {
+                "starter_files": {
+                    "main.py": f"# Final Project: {user_prompt}\n# TODO: Implement the main functionality",
+                    "README.md": f"# Final Project: {user_prompt}\n\n## Description\nComprehensive final project"
+                },
+                "grading_method": "ai_review",
+                "expected_output": ""
+            }
+    
+    # Create the Project object
+    project = Project.objects.create(
+        lesson=lesson,
+        name=f"Final Project: {user_prompt[:50]}...",
+        description=f"Comprehensive final project: {lesson.lesson_description}",
+        grading_method=project_data.get('grading_method', 'ai_review'),
+        expected_output=project_data.get('expected_output', ''),
+        is_final_project=True
+    )
+    
+    # Create File objects for starter files
+    starter_files = project_data.get('starter_files', {})
+    for filename, content in starter_files.items():
+        File.objects.create(
+            project=project,
+            name=filename,
+            relative_path=filename,
+            content=content
+        )
+
+    print(f"✅ Generated comprehensive final project with {len(starter_files)} starter files")
+    return project
+
 @require_http_methods(["POST"])
 def process_generation(request):
     """Process the form submission and save all workflow data to database."""
@@ -540,81 +1015,60 @@ def process_generation(request):
                 message=f"Generated {len(chapter_list)} chapters successfully"
             )
         
-        # Generate and save lessons for each chapter
+        # Generate and save lessons for each chapter using parallel processing
         total_lessons = 0
         chapter_lesson_plans = {}
         
-        for i, chapter in enumerate(created_chapters):
-            print(f"🔄 Generating lessons for Chapter {chapter.chapter_number}...")
-            
-            GenerationLog.objects.create(
-                course_generation=course_generation,
-                step=f"lesson_generation_chapter_{chapter.chapter_number}",
-                status="in_progress",
-                message=f"Generating lessons for Chapter {chapter.chapter_number}"
-            )
-            
-            # Generate lesson plan
-            chapter_item = chapter_list[i]  # Original chapter data for API call
-            lesson_plan = create_lesson(chapter_item, course_structure_text, user_text)
-            chapter_lesson_plans[f"chapter_{chapter.chapter_number}"] = lesson_plan
-            
-            
-            # Save lessons to database
-            with transaction.atomic():
-                for lesson_data in lesson_plan:
-                    GeneratedLesson.objects.create(
-                        chapter=chapter,
-                        lesson_number=int(lesson_data.get("lesson_number", 1)),
-                        lesson_type=lesson_data.get("lesson_type", ""),
-                        lesson_type_id=lesson_data.get("lesson_type_ID"),
-                        lesson_name=lesson_data.get("lesson_name", ""),
-                        lesson_description=lesson_data.get("lesson_description", ""),
-                        lesson_details=lesson_data.get("lesson_details", ""),
-                        lesson_goals=lesson_data.get("lesson_goals", ""),
-                        lesson_guidelines=lesson_data.get("lesson_guidlines", "")
-                    )
-                    total_lessons += 1
-                
-                GenerationLog.objects.create(
-                    course_generation=course_generation,
-                    step=f"lesson_generation_chapter_{chapter.chapter_number}",
-                    status="completed",
-                    message=f"Generated {len(lesson_plan)} lessons for Chapter {chapter.chapter_number}"
+        # Thread-safe lock for shared variables
+        results_lock = threading.Lock()
+        
+        print(f"� Starting parallel processing of {len(created_chapters)} chapters...")
+        
+        # Use ThreadPoolExecutor for parallel processing
+        with ThreadPoolExecutor(max_workers=min(len(created_chapters), 4)) as executor:
+            # Submit all chapter processing tasks
+            future_to_chapter = {}
+            for i, chapter in enumerate(created_chapters):
+                chapter_item = chapter_list[i]  # Original chapter data for API call
+                future = executor.submit(
+                    process_single_chapter, 
+                    chapter, 
+                    chapter_item, 
+                    course_structure_text, 
+                    user_text, 
+                    course_generation
                 )
+                future_to_chapter[future] = (chapter, chapter_item)
             
-            lessons = GeneratedLesson.objects.filter(chapter=chapter)
-            for lesson in lessons:
-                print(f"🔍 Processing lesson {lesson.lesson_number} with type: '{lesson.lesson_type}'")
-                if lesson.lesson_type == 'mcq':
-                    quiz = generate_quiz(lesson)
-                    print(f"✅ Generated quiz for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}, Quiz ID: {quiz.id}")
-                if lesson.lesson_type == "int":
-                    generate_programming_exercise(lesson)
-                if lesson.lesson_type == "vid":
-                    search_youtube_for_lesson(lesson)  
-                    print(f"✅ Prepared YouTube search for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}")
-                if lesson.lesson_type == "ext":
-                    print(f"🔍 Found EXT lesson type! Processing external article for lesson {lesson.lesson_number}")
-                    print(f"🔍 Tavily API Key exists: {bool(os.getenv('TAVILY_API_KEY'))}")
-                    source = get_best_source(f"{lesson.lesson_name}. {lesson.lesson_description} {lesson.lesson_details}")
-                    print(f"🔍 get_best_source returned: {source}")
-                    if source and source.get('url'):
-                        ExternalArticles.objects.create(
-                            lesson=lesson,
-                            url=source['url']
-                        )
-                        print(f"✅ Saved external article URL for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}: {source['url']}")
-                    else:
-                        print(f"⚠️ No suitable external article found for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}")
-                if lesson.lesson_type == "art":
-                    article = ai_gen_article(lesson)
-                    ArticleContent.objects.create(
-                        lesson=lesson,
-                        content=article
-                    )
-                    print(f"✅ Generated article for Lesson {lesson.lesson_number} in Chapter {chapter.chapter_number}")
-            print(f"✅ Saved {len(lesson_plan)} lessons for Chapter {chapter.chapter_number}")
+            # Collect results as they complete
+            for future in as_completed(future_to_chapter):
+                chapter, chapter_item = future_to_chapter[future]
+                try:
+                    result = future.result()
+                    
+                    # Thread-safe update of shared variables
+                    with results_lock:
+                        if result['error'] is None:
+                            chapter_lesson_plans[f"chapter_{result['chapter_number']}"] = result['lesson_plan']
+                            total_lessons += result['lessons_count']
+                            print(f"✅ Completed Chapter {result['chapter_number']} with {result['lessons_count']} lessons")
+                        else:
+                            print(f"❌ Chapter {result['chapter_number']} failed: {result['error']}")
+                            
+                except Exception as exc:
+                    print(f"❌ Chapter {chapter.chapter_number} generated an exception: {exc}")
+                    traceback.print_exc()
+        
+        print(f"🎉 Parallel processing completed! Total lessons generated: {total_lessons}")
+        
+        # Create final project chapter
+        final_project_result = create_final_project_chapter(course_generation, user_text, len(created_chapters) + 1)
+        if final_project_result['success']:
+            total_lessons += final_project_result['lessons_count']
+            chapter_lesson_plans[f"chapter_{final_project_result['chapter_number']}"] = final_project_result['lesson_plan']
+            print(f"✅ Added final project chapter with {final_project_result['lessons_count']} lesson")
+        else:
+            print(f"❌ Failed to create final project chapter: {final_project_result['error']}")
         
         # Compile final course data
         final_course_data = {
@@ -626,6 +1080,7 @@ def process_generation(request):
         # Final update to course generation
         with transaction.atomic():
             course_generation.total_lessons = total_lessons
+            course_generation.total_chapters = len(created_chapters) + (1 if final_project_result['success'] else 0)  # Include final project chapter if successful
             course_generation.status = 'completed'
             course_generation.completed_at = timezone.now()
             course_generation.course_data_json = final_course_data
@@ -1085,3 +1540,562 @@ def lesson_external(request, lesson_id):
     ctx = {'lesson': lesson, 'external': external}
     ctx.update(_sidebar_context_for_lesson(lesson))
     return render(request, 'generation/external_article.html', ctx)
+
+
+def generate_text_response_questions(lesson):
+    """Generate 2-5 questions for text response lessons using Cerebras API."""
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": """
+                    You are an expert educational content creator specializing in creating thoughtful questions 
+                    that test comprehension and application of lesson material.
+
+                    Your task is to create 2-5 questions based on the provided lesson content that require 
+                    text-based responses from students. These questions should:
+                    - Test understanding of key concepts from the lesson
+                    - Encourage critical thinking and application
+                    - Be answerable based on the lesson content
+                    - Vary in difficulty and question type
+                    - Include both factual and analytical questions
+
+                    For each question, provide an optimal answer that demonstrates what a good student 
+                    response would look like.
+
+                    Output format: Return ONLY valid JSON in the following structure:
+                    {
+                        "questions": [
+                            {
+                                "question_number": 1,
+                                "question": "What are the main benefits of using version control in software development?",
+                                "optimal_answer": "Version control provides several key benefits including: tracking changes over time, enabling collaboration among team members, maintaining backup history, allowing easy rollback to previous versions, and enabling branching for feature development."
+                            },
+                            {
+                                "question_number": 2,
+                                "question": "Explain how you would implement error handling in a Python function.",
+                                "optimal_answer": "Error handling in Python can be implemented using try-except blocks. You would wrap potentially problematic code in a try block, catch specific exceptions in except blocks, optionally use finally for cleanup code, and consider logging errors for debugging purposes."
+                            }
+                        ]
+                    }
+
+                    Generate between 2-5 questions. Make them diverse and comprehensive.
+                    DO NOT include any additional text outside the JSON.
+                """,
+            },
+            {
+                "role": "user",
+                "content": f"""
+                    Lesson Name: {lesson.lesson_name}
+                    Lesson Description: {lesson.lesson_description}
+                    Lesson Details: {lesson.lesson_details}
+                    Lesson Goals: {lesson.lesson_goals}
+                    Lesson Guidelines: {lesson.lesson_guidelines}
+                """,
+            }
+        ],
+        model="qwen-3-coder-480b",
+    )
+
+    response_content = chat_completion.choices[0].message.content
+    try:
+        questions_data = json.loads(response_content.strip())
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error in generate_text_response_questions: {e}")
+        print(f"Response content length: {len(response_content)}")
+        # Try to extract JSON between first { and last }
+        start = response_content.find('{')
+        end = response_content.rfind('}')
+        if start != -1 and end > start:
+            json_str = response_content[start:end+1].strip()
+            try:
+                questions_data = json.loads(json_str)
+            except json.JSONDecodeError as e2:
+                print(f"Failed to parse extracted JSON: {e2}")
+                raise ValueError("Unable to parse questions JSON")
+        else:
+            raise ValueError("No JSON object found in response")
+    
+    # Save questions to the database using the new model
+    with transaction.atomic():
+        # Delete existing questions for this lesson
+        TextResponseQuestion.objects.filter(lesson=lesson).delete()
+        
+        # Create new questions
+        questions = questions_data.get('questions', [])
+        for question_data in questions:
+            TextResponseQuestion.objects.create(
+                lesson=lesson,
+                question_number=question_data.get('question_number', 1),
+                question=question_data.get('question', ''),
+                optimal_answer=question_data.get('optimal_answer', '')
+            )
+    
+    print(f"✅ Generated and saved {len(questions)} text response questions for Lesson {lesson.lesson_number} in Chapter {lesson.chapter.chapter_number}")
+    
+    return questions_data
+
+
+def grade_text_responses(lesson, user_answers):
+    """Grade user text responses using Cerebras API."""
+    # Get the questions for this lesson
+    questions = TextResponseQuestion.objects.filter(lesson=lesson).order_by('question_number')
+    
+    if not questions.exists():
+        raise ValueError("No questions found for this lesson")
+    
+    # Prepare the grading prompt
+    grading_data = []
+    for question in questions:
+        question_num = str(question.question_number)
+        user_answer = user_answers.get(question_num, "")
+        
+        grading_data.append({
+            "question_number": question.question_number,
+            "question": question.question,
+            "optimal_answer": question.optimal_answer,
+            "user_answer": user_answer
+        })
+    
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": """
+                    You are an expert educational assessor and grader. Your task is to evaluate student text responses to questions.
+
+                    For each question, you will be provided with:
+                    - The original question
+                    - The optimal answer (reference answer)
+                    - The student's actual answer
+
+                    Grade each answer on a scale of 0-100 based on:
+                    - Accuracy: How correct is the information?
+                    - Completeness: Does it cover the key points?
+                    - Understanding: Does the student demonstrate comprehension?
+                    - Clarity: Is the answer well-structured and clear?
+
+                    Provide constructive feedback explaining what was good and what could be improved.
+
+                    Output format: Return ONLY valid JSON in the following structure:
+                    {
+                        "grades": [
+                            {
+                                "question_number": 1,
+                                "score": 85,
+                                "feedback": "Good understanding of the core concepts. You correctly identified the main benefits but could have elaborated more on collaboration aspects.",
+                                "strengths": ["Accurate information", "Clear structure"],
+                                "improvements": ["Add more detail on team collaboration", "Include specific examples"]
+                            },
+                            {
+                                "question_number": 2,
+                                "score": 92,
+                                "feedback": "Excellent response with clear examples and comprehensive coverage of error handling techniques.",
+                                "strengths": ["Complete coverage", "Good examples", "Clear explanation"],
+                                "improvements": ["Minor: Could mention logging best practices"]
+                            }
+                        ],
+                        "overall_score": 88.5,
+                        "overall_feedback": "Strong performance overall. Good understanding of key concepts with room for more detailed explanations."
+                    }
+
+                    Be fair, constructive, and encouraging in your feedback.
+                    DO NOT include any additional text outside the JSON.
+                """,
+            },
+            {
+                "role": "user",
+                "content": f"""
+                    Lesson: {lesson.lesson_name}
+                    
+                    Please grade the following responses:
+                    
+                    {json.dumps(grading_data, indent=2)}
+                """,
+            }
+        ],
+        model="qwen-3-coder-480b",
+    )
+
+    response_content = chat_completion.choices[0].message.content
+    try:
+        grades_data = json.loads(response_content.strip())
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error in grade_text_responses: {e}")
+        print(f"Response content length: {len(response_content)}")
+        # Try to extract JSON between first { and last }
+        start = response_content.find('{')
+        end = response_content.rfind('}')
+        if start != -1 and end > start:
+            json_str = response_content[start:end+1].strip()
+            try:
+                grades_data = json.loads(json_str)
+            except json.JSONDecodeError as e2:
+                print(f"Failed to parse extracted JSON: {e2}")
+                # Create fallback grades
+                fallback_grades = {
+                    "grades": [],
+                    "overall_score": 75.0,
+                    "overall_feedback": "Your responses have been received and reviewed."
+                }
+                for question in questions:
+                    question_num = str(question.question_number)
+                    if question_num in user_answers and user_answers[question_num].strip():
+                        fallback_grades["grades"].append({
+                            "question_number": question.question_number,
+                            "score": 75,
+                            "feedback": "Your response shows understanding of the topic.",
+                            "strengths": ["Shows engagement with the material"],
+                            "improvements": ["Consider adding more specific details"]
+                        })
+                return fallback_grades
+        else:
+            raise ValueError("No JSON object found in response")
+    
+    print(f"✅ Graded {len(grades_data.get('grades', []))} responses for Lesson {lesson.lesson_number} in Chapter {lesson.chapter.chapter_number}")
+    
+    return grades_data
+
+
+def lesson_text_response(request, lesson_id):
+    """Display text response questions for a lesson (txt)."""
+    lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
+    
+    # Check if questions exist in the database
+    questions = TextResponseQuestion.objects.filter(lesson=lesson).order_by('question_number')
+    
+    # Generate questions if they don't exist yet
+    if not questions.exists():
+        try:
+            generate_text_response_questions(lesson)
+            # Reload questions from database
+            questions = TextResponseQuestion.objects.filter(lesson=lesson).order_by('question_number')
+        except Exception as e:
+            print(f"Error generating text response questions: {str(e)}")
+            # Create a fallback question
+            TextResponseQuestion.objects.create(
+                lesson=lesson,
+                question_number=1,
+                question=f"Summarize the key concepts from the lesson: {lesson.lesson_name}",
+                optimal_answer="Please provide a comprehensive summary based on the lesson content."
+            )
+            questions = TextResponseQuestion.objects.filter(lesson=lesson).order_by('question_number')
+    
+    ctx = {
+        'lesson': lesson, 
+        'questions': questions
+    }
+    ctx.update(_sidebar_context_for_lesson(lesson))
+    return render(request, 'generation/text_response.html', ctx)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def submit_text_responses(request, lesson_id):
+    """Submit and grade text responses for a lesson."""
+    try:
+        lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
+        
+        # Parse the submitted answers
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+            user_answers = data.get('answers', {})
+        else:
+            user_answers = {}
+            for key, value in request.POST.items():
+                if key.startswith('answer-'):
+                    question_num = key.replace('answer-', '')
+                    user_answers[question_num] = value
+        
+        # Validate that we have answers
+        if not user_answers or all(not answer.strip() for answer in user_answers.values()):
+            return JsonResponse({
+                'success': False,
+                'message': 'Please provide at least one answer before submitting.'
+            }, status=400)
+        
+        # Grade the responses using Cerebras API
+        try:
+            grades_data = grade_text_responses(lesson, user_answers)
+        except Exception as grading_error:
+            print(f"Error grading responses: {str(grading_error)}")
+            return JsonResponse({
+                'success': False,
+                'message': f'Error grading responses: {str(grading_error)}'
+            }, status=500)
+        
+        # Save the submission to database
+        with transaction.atomic():
+            submission = TextResponseSubmission.objects.create(
+                lesson=lesson,
+                user=request.user if request.user.is_authenticated else None,
+                user_answers=user_answers,
+                grades=grades_data,
+                total_score=grades_data.get('overall_score', 0),
+                total_questions=len(user_answers),
+                graded_at=timezone.now()
+            )
+        
+        print(f"✅ Saved text response submission for Lesson {lesson.lesson_number}, Submission ID: {submission.id}")
+        
+        return JsonResponse({
+            'success': True,
+            'submission_id': submission.id,
+            'grades': grades_data,
+            'message': 'Your responses have been submitted and graded successfully!'
+        })
+        
+    except Exception as e:
+        print(f"Error processing text response submission: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'An error occurred: {str(e)}'
+        }, status=500)
+
+
+def course_detail(request, course_id):
+    """Display course details with all chapters and lessons."""
+    try:
+        course_generation = get_object_or_404(CourseGeneration, id=course_id)
+        
+        # Get all chapters with their lessons
+        chapters = (GeneratedChapter.objects
+                   .filter(course_generation=course_generation)
+                   .prefetch_related('lessons', 'lessons__quiz', 'lessons__article', 'lessons__external_article')
+                   .order_by('chapter_number'))
+        
+        # Calculate totals
+        total_lessons = sum(chapter.lessons.count() for chapter in chapters)
+        total_chapters = chapters.count()
+        
+        # Get lesson type stats
+        lesson_type_counts = {}
+        for chapter in chapters:
+            for lesson in chapter.lessons.all():
+                lesson_type = lesson.lesson_type
+                lesson_type_counts[lesson_type] = lesson_type_counts.get(lesson_type, 0) + 1
+        
+        # Calculate completion percentage (for now, just based on status)
+        completion_percentage = 100 if course_generation.status == 'completed' else 0
+        
+        context = {
+            'course_generation': course_generation,
+            'chapters': chapters,
+            'total_chapters': total_chapters,
+            'total_lessons': total_lessons,
+            'lesson_type_counts': lesson_type_counts,
+            'completion_percentage': completion_percentage,
+        }
+        
+        return render(request, 'generation/course_detail.html', context)
+        
+    except CourseGeneration.DoesNotExist:
+        return render(request, 'generation/error.html', {
+            'error': 'Course not found'
+        })
+
+
+def course_list(request):
+    """Display all generated courses."""
+    courses = CourseGeneration.objects.all().order_by('-created_at')
+    
+    context = {
+        'courses': courses
+    }
+    
+    return render(request, 'generation/course_list.html', context)
+
+
+def generate_ai_code_feedback(code_content, file_name="main.py", lesson_context=""):
+    """Generate AI feedback for code content using Cerebras API."""
+    try:
+        messages = [
+            {
+                "role": "system",
+                "content": """
+                    You are an expert programming mentor and code reviewer. Your task is to analyze the provided code 
+                    and give constructive, helpful feedback to help a student improve their programming skills.
+
+                    Provide feedback in the following categories when relevant:
+                    1. Code Quality & Best Practices
+                    2. Potential Bugs or Issues
+                    3. Performance Optimizations
+                    4. Code Style & Readability
+                    5. Architecture & Design
+                    6. Encouragement & Positive Reinforcement
+
+                    Format your response as a JSON object with the following structure:
+                    {
+                        "feedback_items": [
+                            {
+                                "type": "improvement|bug|style|performance|architecture|encouragement",
+                                "priority": 1-5,
+                                "title": "Brief title of the feedback",
+                                "message": "Detailed explanation and suggestion",
+                                "line_reference": "Optional line number or code snippet reference"
+                            }
+                        ],
+                        "overall_assessment": "Brief overall assessment of the code quality and progress"
+                    }
+
+                    Be encouraging and constructive. This is for a student learning to code, so balance criticism 
+                    with positive reinforcement. Focus on the most important improvements first.
+                    
+                    DO NOT include any additional text outside the JSON.
+                """,
+            },
+            {
+                "role": "user",
+                "content": f"""
+                    Please analyze this code and provide feedback:
+                    
+                    File: {file_name}
+                    Lesson Context: {lesson_context}
+                    
+                    Code:
+                    ```
+                    {code_content}
+                    ```
+                """,
+            }
+        ]
+        
+        # Try primary client first
+        try:
+            print(f"🔄 Generating AI feedback for {file_name} with primary Cerebras client...")
+            chat_completion = client.chat.completions.create(
+                messages=messages,
+                model="qwen-3-coder-480b",
+            )
+            print("✅ Primary client succeeded for AI feedback")
+        except Exception as e:
+            print(f"❌ Primary client failed for AI feedback: {str(e)}")
+            try:
+                print(f"🔄 Retrying AI feedback with secondary Cerebras client...")
+                chat_completion = second_client.chat.completions.create(
+                    messages=messages,
+                    model="qwen-3-coder-480b",
+                )
+                print("✅ Secondary client succeeded for AI feedback")
+            except Exception as e2:
+                print(f"❌ Secondary client also failed for AI feedback: {str(e2)}")
+                # Return fallback feedback
+                return {
+                    "feedback_items": [
+                        {
+                            "type": "encouragement",
+                            "priority": 3,
+                            "title": "Keep coding!",
+                            "message": "You're making great progress! Keep working on your implementation.",
+                            "line_reference": ""
+                        }
+                    ],
+                    "overall_assessment": "AI feedback temporarily unavailable, but you're doing great!"
+                }
+
+        response_content = chat_completion.choices[0].message.content.strip()
+        
+        try:
+            feedback_data = json.loads(response_content)
+            return feedback_data
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error in AI feedback: {e}")
+            # Try to extract JSON between first { and last }
+            start = response_content.find('{')
+            end = response_content.rfind('}')
+            if start != -1 and end > start:
+                try:
+                    feedback_data = json.loads(response_content[start:end+1])
+                    return feedback_data
+                except json.JSONDecodeError:
+                    pass
+            
+            # Return fallback feedback if JSON parsing fails
+            return {
+                "feedback_items": [
+                    {
+                        "type": "encouragement",
+                        "priority": 3,
+                        "title": "Keep going!",
+                        "message": "Your code is being processed. Continue working and the feedback will improve!",
+                        "line_reference": ""
+                    }
+                ],
+                "overall_assessment": "Code analysis in progress..."
+            }
+            
+    except Exception as e:
+        print(f"❌ Error generating AI feedback: {str(e)}")
+        return {
+            "feedback_items": [
+                {
+                    "type": "encouragement",
+                    "priority": 3,
+                    "title": "Technical difficulty",
+                    "message": "Feedback system temporarily unavailable, but keep coding!",
+                    "line_reference": ""
+                }
+            ],
+            "overall_assessment": "System temporarily unavailable"
+        }
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_ai_feedback(request):
+    """API endpoint to get AI feedback for code content."""
+    try:
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+        else:
+            return JsonResponse({'error': 'Content-Type must be application/json'}, status=400)
+        
+        code_content = data.get('code_content', '')
+        file_name = data.get('file_name', 'main.py')
+        lesson_id = data.get('lesson_id')
+        
+        if not code_content.strip():
+            return JsonResponse({
+                'feedback_items': [
+                    {
+                        "type": "encouragement",
+                        "priority": 2,
+                        "title": "Start coding!",
+                        "message": "Begin by writing some code and I'll provide helpful feedback as you work.",
+                        "line_reference": ""
+                    }
+                ],
+                'overall_assessment': "Ready to help you code!"
+            })
+        
+        # Get lesson context if lesson_id provided
+        lesson_context = ""
+        if lesson_id:
+            try:
+                lesson = GeneratedLesson.objects.get(id=lesson_id)
+                lesson_context = f"Lesson: {lesson.lesson_name} - {lesson.lesson_description}"
+            except GeneratedLesson.DoesNotExist:
+                pass
+        
+        # Generate AI feedback
+        feedback = generate_ai_code_feedback(code_content, file_name, lesson_context)
+        
+        return JsonResponse(feedback)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        print(f"❌ Error in get_ai_feedback: {str(e)}")
+        return JsonResponse({
+            'error': 'Internal server error',
+            'feedback_items': [
+                {
+                    "type": "encouragement",
+                    "priority": 3,
+                    "title": "Keep coding!",
+                    "message": "Feedback system temporarily unavailable, but you're doing great!",
+                    "line_reference": ""
+                }
+            ],
+            'overall_assessment': "System temporarily unavailable"
+        }, status=500)

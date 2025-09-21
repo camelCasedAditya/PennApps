@@ -220,3 +220,48 @@ class ExternalArticles(models.Model):
     
     def __str__(self):
         return f"External Article for {self.lesson.lesson_name}"
+
+
+class TextResponseQuestion(models.Model):
+    """Store individual text response questions for lessons."""
+    lesson = models.ForeignKey(GeneratedLesson, on_delete=models.CASCADE, related_name='text_response_questions')
+    
+    question_number = models.IntegerField(help_text="Question number within the lesson")
+    question = models.TextField(help_text="The question text")
+    optimal_answer = models.TextField(help_text="The optimal answer for this question")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['question_number']
+        unique_together = ['lesson', 'question_number']
+        
+    def __str__(self):
+        return f"Q{self.question_number}: {self.question[:50]}..."
+
+
+class TextResponseSubmission(models.Model):
+    """Store user submissions for text response questions and their grades."""
+    lesson = models.ForeignKey(GeneratedLesson, on_delete=models.CASCADE, related_name='text_submissions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Store all answers as JSON (question_number -> user_answer)
+    user_answers = models.JSONField(help_text="User's answers to all questions in JSON format")
+    
+    # Store grades as JSON (question_number -> grade_data)
+    grades = models.JSONField(help_text="Grades and feedback for each question in JSON format")
+    
+    # Overall scoring
+    total_score = models.FloatField(help_text="Overall score as percentage (0-100)")
+    total_questions = models.IntegerField(help_text="Total number of questions answered")
+    
+    # Metadata
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    graded_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-submitted_at']
+        
+    def __str__(self):
+        return f"Submission for {self.lesson.lesson_name} - Score: {self.total_score:.1f}%"
