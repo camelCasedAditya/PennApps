@@ -931,6 +931,67 @@ def generate_comprehensive_final_project(lesson, user_prompt):
     print(f"✅ Generated comprehensive final project with {len(starter_files)} starter files")
     return project
 
+def generate_course_name(user_prompt, chapter_list=None):
+    """Generate a concise, catalog-ready course name from the user's prompt (and optional chapters)."""
+    try:
+        chapter_hint = ""
+        if chapter_list:
+            try:
+                # Use up to first 5 chapter names as hint
+                names = [str(it.get('chapter_name', '')) for it in chapter_list if it.get('chapter_name')]
+                if names:
+                    chapter_hint = " | Chapters: " + ", ".join(names[:5])
+            except Exception:
+                chapter_hint = ""
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You name courses for a catalog. Create a concise, engaging course title.\n"
+                    "Requirements: 3-8 words, Title Case, plain text only.\n"
+                    "No extra commentary, quotes, code fences, or emojis.\n"
+                    "Prefer clarity over buzzwords; keep it specific to the goal."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"User Goal: {user_prompt}{chapter_hint}",
+            },
+        ]
+
+        # Try primary client
+        try:
+            chat = client.chat.completions.create(
+                messages=messages,
+                model="qwen-3-235b-a22b-instruct-2507",
+            )
+        except Exception:
+            # Fallback to secondary client
+            chat = second_client.chat.completions.create(
+                messages=messages,
+                model="qwen-3-235b-a22b-instruct-2507",
+            )
+
+        raw = chat.choices[0].message.content.strip()
+        # Clean common wrappers
+        title = raw.strip().strip('"').strip("'")
+        # Keep single line, reasonable length
+        title = title.splitlines()[0][:80].strip()
+        # Ensure some minimal content
+        if not title:
+            raise ValueError("empty title")
+        return title
+    except Exception:
+        # Simple fallback from the prompt
+        base = (user_prompt or "Custom Course").strip()
+        # Take first ~6 words and title-case
+        words = base.split()
+        fallback = " ".join(words[:6]).title()
+        if not fallback:
+            fallback = "Custom Course"
+        return fallback
+
 @require_http_methods(["POST"])
 def process_generation(request):
     """Process the form submission and save all workflow data to database."""
@@ -1079,15 +1140,53 @@ def process_generation(request):
         else:
             print(f"❌ Failed to create final project chapter: {final_project_result['error']}")
         
+        # Generate a course name using AI
+        try:
+            GenerationLog.objects.create(
+                course_generation=course_generation,
+                step="course_name_generation",
+                status="in_progress",
+                message="Generating course name"
+            )
+            course_name = generate_course_name(user_text, chapter_list)
+            GenerationLog.objects.create(
+                course_generation=course_generation,
+                step="course_name_generation",
+                status="completed",
+                message=f"Generated course name: {course_name}"
+            )
+        except Exception as name_err:
+            print(f"⚠️ Failed to generate course name: {name_err}")
+            course_name = None
+            try:
+                GenerationLog.objects.create(
+                    course_generation=course_generation,
+                    step="course_name_generation",
+                    status="failed",
+                    level="warning",
+                    message=f"Failed to generate course name: {name_err}"
+                )
+            except Exception:
+                pass
+
         # Compile final course data
         final_course_data = {
             "original_prompt": user_text,
+            "course_name": course_name or "Custom Course",
             "overall_lesson_plan": chapter_list,
             "chapter_lesson_plans": chapter_lesson_plans
         }
         
         # Final update to course generation
         with transaction.atomic():
+            # Overwrite user_prompt with generated course name as requested
+            try:
+                generated_title = final_course_data.get("course_name")
+                if generated_title:
+                    course_generation.user_prompt = generated_title
+            except Exception:
+                # If anything goes wrong, keep existing prompt
+                pass
             course_generation.total_lessons = total_lessons
             course_generation.total_chapters = len(created_chapters) + (1 if final_project_result['success'] else 0)  # Include final project chapter if successful
             course_generation.status = 'completed'
