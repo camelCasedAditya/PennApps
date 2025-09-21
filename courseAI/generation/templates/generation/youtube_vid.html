@@ -129,8 +129,6 @@
                                 <h3>{{ video.title }}</h3>
                                 <iframe width="560" height="315" src="https://www.youtube.com/embed/{{ video.video_id }}" frameborder="0" allowfullscreen></iframe>
                                 <p>{{ video.description }}</p>
-                                <p><strong>Channel:</strong> {{ video.channel_title }}<br>
-                                <strong>Views:</strong> {{ video.raw_data.statistics.viewCount|default:'N/A' }}</p>
                             </div>
                         {% endfor %}
                     </div>

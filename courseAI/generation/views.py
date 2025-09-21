@@ -944,23 +944,31 @@ def process_generation(request):
         if request.content_type == 'application/json':
             data = json.loads(request.body)
             user_text = data.get('text', '')
-            # Hardcoded experience level as requested
-            experience_level = "I know nothing, I don't even know how to run code or anything."
+            experience_level = data.get('experience', 'beginner')
         else:
             user_text = request.POST.get('text', '')
-            # Hardcoded experience level as requested
-            experience_level = "I know nothing, I don't even know how to run code or anything."
+            experience_level = request.POST.get('experience', 'beginner')
+        
+        # Convert experience level to descriptive text
+        experience_mapping = {
+            'beginner': "I know nothing, I don't even know how to run code or anything.",
+            'some_basics': "I have heard of this topic and understand some basic concepts, but I haven't practiced much yet.",
+            'intermediate': "I have some experience and knowledge in this area, but I want to learn more advanced concepts.",
+            'advanced': "I'm experienced in this area but want to deepen my skills and learn advanced techniques.",
+            'expert': "I'm already quite skilled in this area but want to learn cutting-edge techniques and best practices."
+        }
+        experience_description = experience_mapping.get(experience_level, experience_mapping['beginner'])
         
         # Print the received text to the terminal
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"📝 [{timestamp}] Received text from frontend: {user_text}")
-        print(f"📊 Full request data: {json.dumps({'text': user_text, 'experience': experience_level, 'timestamp': timestamp}, indent=2)}")
+        print(f"📊 Full request data: {json.dumps({'text': user_text, 'experience': experience_level, 'experience_description': experience_description, 'timestamp': timestamp}, indent=2)}")
     
         # Create initial course generation record
         with transaction.atomic():
             course_generation = CourseGeneration.objects.create(
                 user_prompt=user_text,
-                experience_level=experience_level,
+                experience_level=experience_description,
                 status='generating'
             )
             
@@ -982,7 +990,7 @@ def process_generation(request):
             message="Generating chapter structure"
         )
         
-        chapter_list = chapter_list_create(user_text, experience_level)
+        chapter_list = chapter_list_create(user_text, experience_description)
         
         # Create course structure summary for lesson generation
         course_structure = []

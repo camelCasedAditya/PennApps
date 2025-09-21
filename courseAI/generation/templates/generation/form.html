@@ -82,18 +82,30 @@
       font-size: 1.1rem;
       color: #222;
     }
-    textarea {
+    textarea, select {
       width: 100%;
-      min-height: 140px;
       padding: 16px;
       border: 2px solid #e0e7ff;
       border-radius: 12px;
       font-size: 1rem;
-      resize: vertical;
       background: #f9fafb;
       transition: border-color 0.3s, box-shadow 0.3s;
+      margin-bottom: 16px;
     }
-    textarea:focus {
+    textarea {
+      min-height: 140px;
+      resize: vertical;
+    }
+    select {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+      background-position: right 12px center;
+      background-repeat: no-repeat;
+      background-size: 16px;
+      padding-right: 40px;
+    }
+    textarea:focus, select:focus {
       outline: none;
       border-color: #6366f1;
       box-shadow: 0 0 0 4px rgba(99,102,241,0.2);
@@ -235,6 +247,16 @@
         {% csrf_token %}
         <label for="course-input">What do you want to learn or build?</label>
         <textarea id="course-input" name="course-input" placeholder="e.g. Build a personal finance app, Learn Python from scratch..."></textarea>
+        
+        <label for="experience-input">What's your experience level with this topic?</label>
+        <select id="experience-input" name="experience-input">
+          <option value="beginner">Complete Beginner - I know nothing about this topic</option>
+          <option value="some_basics">Some Basics - I've heard of it but haven't practiced</option>
+          <option value="intermediate">Intermediate - I have some experience and knowledge</option>
+          <option value="advanced">Advanced - I'm experienced but want to deepen my skills</option>
+          <option value="expert">Expert - I want to learn cutting-edge techniques</option>
+        </select>
+        
         <button type="submit" class="submit-btn" id="submitBtn">
           Generate Course
         </button>
@@ -250,6 +272,7 @@
     document.addEventListener('DOMContentLoaded', function() {
       const form = document.querySelector('.course-form');
       const input = document.getElementById('course-input');
+      const experienceInput = document.getElementById('experience-input');
       const submitBtn = document.getElementById('submitBtn');
       const resultDiv = document.getElementById('result');
       const resultContent = document.getElementById('resultContent');
@@ -258,6 +281,8 @@
         e.preventDefault();
         
         const text = input.value.trim();
+        const experience = experienceInput.value;
+        
         if (!text) {
           alert('Please enter what you want to learn or build.');
           return;
@@ -279,7 +304,10 @@
               'X-CSRFToken': getCookie('csrftoken')
             },
             credentials: 'same-origin',
-            body: JSON.stringify({ text: text })
+            body: JSON.stringify({ 
+              text: text,
+              experience: experience 
+            })
           });
 
           const data = await response.json();
