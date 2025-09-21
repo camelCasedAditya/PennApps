@@ -1439,6 +1439,138 @@ def load_lesson_project(request, lesson_id):
     
     return render(request, 'generation/code_editor.html', context)
 
+@require_http_methods(["GET"])
+def final_project_feedback(request, lesson_id):
+    """Return lightweight AI feedback (5 bullet points) for final project lessons by scanning workspace files."""
+    try:
+        lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
+        # Ensure this is a final project
+        try:
+            project = lesson.programming_project
+        except Project.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'No project found for this lesson'
+            }, status=404)
+
+        if not getattr(project, 'is_final_project', False):
+            return JsonResponse({
+                'success': False,
+                'message': 'This endpoint is only for final project lessons'
+            }, status=400)
+
+        # Collect current workspace files (same path used elsewhere)
+        workspace_path = '/Users/aditya/Documents/Programming/Hackathon/PennApps/pennapps25/workspace-python/'
+        all_files_content = {}
+        if os.path.exists(workspace_path):
+            skip_dirs = {'venv', 'env', '.venv', '.env', '__pycache__', '.git', 'node_modules',
+                         '.pytest_cache', '.mypy_cache', '.tox', 'build', 'dist', '.eggs'}
+            for root, dirs, files in os.walk(workspace_path):
+                dirs[:] = [d for d in dirs if not d.startswith('.') and d not in skip_dirs]
+                for file in files:
+                    if (file.endswith(('.py', '.txt', '.md', '.json', '.yaml', '.yml', '.cfg', '.ini')) and
+                        not file.startswith('.') and not file.endswith(('.pyc', '.pyo', '.log'))):
+                        file_path = os.path.join(root, file)
+                        relative_path = os.path.relpath(file_path, workspace_path)
+                        try:
+                            if os.path.getsize(file_path) > 50 * 1024:
+                                continue
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                if content.strip() and len(content) < 10000:
+                                    all_files_content[relative_path] = content
+                        except (UnicodeDecodeError, OSError, PermissionError):
+                            continue
+
+        if not all_files_content:
+            return JsonResponse({
+                'success': True,
+                'bullets': [
+                    "No code files found yet in the workspace.",
+                    "Open the workspace and start coding to receive feedback.",
+                    "Keep files under 10KB each to be included in analysis.",
+                    "Place your main logic in main.py or .py files.",
+                    "This panel refreshes every 10 seconds."
+                ]
+            })
+
+        # Build limited-size code summary
+        file_priority = []
+        for file_path, content in all_files_content.items():
+            priority = 0 if file_path == 'main.py' else (1 if file_path.endswith('.py') else 2)
+            file_priority.append((priority, file_path, content))
+        file_priority.sort(key=lambda x: x[0])
+
+        code_summary = "PROJECT FILES:\n" + "="*50 + "\n\n"
+        total_content_size = 0
+        max_content_size = 20000  # smaller than correction path
+        files_included = 0
+        for priority, fpath, content in file_priority:
+            file_section = f"FILE: {fpath}\n" + "-"*30 + "\n" + content + "\n\n"
+            if total_content_size + len(file_section) > max_content_size:
+                break
+            code_summary += file_section
+            total_content_size += len(file_section)
+            files_included += 1
+
+        # Ask Cerebras for 5 concise bullet points of feedback
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are an expert code reviewer. Analyze the student's current multi-file project and "
+                    "return EXACTLY 5 concise bullet points of feedback focusing on correctness, structure, "
+                    "style, potential bugs, and next steps. Do not rewrite code. Return ONLY valid JSON: "
+                    "{\n  \"bullets\": [\"point1\", \"point2\", \"point3\", \"point4\", \"point5\"]\n}"
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Lesson: {lesson.lesson_name}\n\n{code_summary}"
+            }
+        ]
+
+        try:
+            chat_completion = client.chat.completions.create(
+                messages=messages,
+                model="qwen-3-coder-480b",
+            )
+            response_content = chat_completion.choices[0].message.content.strip()
+            try:
+                data = json.loads(response_content)
+            except json.JSONDecodeError:
+                start = response_content.find('{')
+                end = response_content.rfind('}')
+                if start != -1 and end > start:
+                    data = json.loads(response_content[start:end+1])
+                else:
+                    data = {"bullets": ["Feedback temporarily unavailable.", "Please try again shortly.", "" , "", ""]}
+        except Exception as e:
+            print(f"❌ Final project feedback error: {e}")
+            data = {"bullets": [
+                "Feedback service error.",
+                "Check your internet connection.",
+                "Reduce file size if very large.",
+                "Ensure code compiles without syntax errors.",
+                "Retry in a few seconds."
+            ]}
+
+        bullets = data.get('bullets', [])
+        # Ensure exactly 5 concise points
+        bullets = [b.strip() for b in bullets if isinstance(b, str) and b.strip()][:5]
+        while len(bullets) < 5:
+            bullets.append("")
+
+        return JsonResponse({
+            'success': True,
+            'bullets': bullets
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error generating feedback: {str(e)}'
+        }, status=500)
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def submit_code_correction(request, lesson_id):

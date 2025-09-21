@@ -15,6 +15,7 @@ urlpatterns = [
     path('lesson/<int:lesson_id>/external/', views.lesson_external, name='lesson_external'),
     path('lesson/<int:lesson_id>/text/', views.lesson_text_response, name='lesson_text_response'),
     path('lesson/<int:lesson_id>/text/submit/', views.submit_text_responses, name='submit_text_responses'),
+    path('lesson/<int:lesson_id>/final_project_feedback/', views.final_project_feedback, name='final_project_feedback'),
     path('lesson/<int:lesson_id>/project/', views.load_lesson_project, name='load_lesson_project'),
     path('lesson/<int:lesson_id>/correct/', views.submit_code_correction, name='submit_code_correction'),
     path('api/ai-feedback/', views.get_ai_feedback, name='get_ai_feedback'),

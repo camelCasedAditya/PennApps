@@ -211,6 +211,38 @@
             color: #374151;
             background: #f3f4f6;
         }
+
+        /* Live feedback panel (final project only) */
+        #live-feedback {
+            margin-top: 20px;
+            padding: 0;
+            background: white;
+            border-radius: 8px;
+            font-size: 14px;
+            overflow: hidden;
+            display: none; /* shown only for final project */
+            max-height: 60vh;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        #live-feedback-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            border-bottom: 1px solid #e5e7eb;
+            font-weight: 600;
+            color: #374151;
+        }
+        #live-feedback-content {
+            overflow-y: auto;
+            padding: 20px;
+            max-height: 50vh;
+            line-height: 1.6;
+        }
+        #live-feedback-content ul { margin: 8px 0; padding-left: 20px; }
+        #live-feedback-content li { margin: 6px 0; color: #374151; }
     </style>
 </head>
 <body>
@@ -220,7 +252,7 @@
             <iframe id="code-editor" src="http://localhost:8080/?folder=/home/coder/workspace" frameborder="0"></iframe>
         </div>
         <div class="right-sidebar">
-            <div id="control-panel">
+            <div id="control-panel" data-is-final-project="{{ project.is_final_project|yesno:'true,false' }}">
                 <div id="lesson-info">
                     <strong>{{ lesson.lesson_name }}</strong><br>
                     {{ lesson.lesson_description|truncatechars:100 }}
@@ -239,11 +271,24 @@
                         <!-- Feedback content will be inserted here by JavaScript -->
                     </div>
                 </div>
+
+                <!-- Live feedback (auto-updating every 10s) for final project -->
+                <div id="live-feedback">
+                    <div id="live-feedback-header">
+                        <strong>Live Feedback (auto-updates every 10s)</strong>
+                        <span id="live-feedback-status" style="font-size: 12px; color: #6b7280;">Idle</span>
+                    </div>
+                    <div id="live-feedback-content">
+                        <ul id="live-feedback-list"></ul>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
+    const IS_FINAL_PROJECT = (document.getElementById('control-panel')?.dataset?.isFinalProject === 'true');
+
         function toggleCorrection() {
             const content = document.getElementById('correction-content');
             const btn = document.getElementById('minimize-btn');
@@ -269,6 +314,60 @@
             } else {
                 statusEl.className = 'success';
             }
+        }
+
+        // Live feedback polling for final projects
+        async function pollLiveFeedback() {
+            const status = document.getElementById('live-feedback-status');
+            const list = document.getElementById('live-feedback-list');
+            try {
+                status.textContent = 'Updating…';
+                const res = await fetch(`/generation/lesson/{{ lesson.id }}/final_project_feedback/`, { method: 'GET' });
+                const data = await res.json();
+                list.innerHTML = '';
+                if (data && data.success && Array.isArray(data.bullets)) {
+                    const bullets = data.bullets.filter(b => typeof b === 'string' && b.trim().length > 0).slice(0, 5);
+                    if (bullets.length === 0) {
+                        list.innerHTML = '<li>No feedback yet. Keep coding and check back shortly.</li>';
+                    } else {
+                        for (const b of bullets) {
+                            const li = document.createElement('li');
+                            li.textContent = b;
+                            list.appendChild(li);
+                        }
+                    }
+                    status.textContent = 'Live';
+                } else {
+                    status.textContent = 'Error';
+                    list.innerHTML = '<li>Feedback temporarily unavailable. Will retry…</li>';
+                }
+            } catch (e) {
+                console.error('Live feedback error:', e);
+                const list = document.getElementById('live-feedback-list');
+                status.textContent = 'Error';
+                list.innerHTML = '<li>Network error while fetching feedback.</li>';
+            }
+        }
+
+        function startLiveFeedback() {
+            const panel = document.getElementById('live-feedback');
+            const correctBtn = document.getElementById('correct-btn');
+            const correctionResult = document.getElementById('correction-result');
+            // Hide manual correction and show live panel
+            if (correctBtn) correctBtn.style.display = 'none';
+            if (correctionResult) correctionResult.style.display = 'none';
+            if (panel) panel.style.display = 'block';
+            showStatus('Live feedback enabled. We\'ll analyze your project every 10 seconds.', false, true);
+            // Initial fetch
+            pollLiveFeedback();
+            // Interval
+            window.__liveFeedbackInterval = setInterval(pollLiveFeedback, 10000);
+            // Cleanup on unload
+            window.addEventListener('beforeunload', () => {
+                if (window.__liveFeedbackInterval) {
+                    clearInterval(window.__liveFeedbackInterval);
+                }
+            });
         }
 
         async function getWorkspaceFiles() {
@@ -420,9 +519,9 @@
             }
         }
 
-        // Optional: Submit for correction with Ctrl+Enter
+        // Optional: Submit for correction with Ctrl+Enter (disabled for final project)
         document.addEventListener('keydown', function(e) {
-            if (e.ctrlKey && e.key === 'Enter') {
+            if (!IS_FINAL_PROJECT && e.ctrlKey && e.key === 'Enter') {
                 e.preventDefault();
                 submitForCorrection();
             }
@@ -435,6 +534,11 @@
                 saveProject();
             }
         });
+
+        // Start live feedback if this is the final project
+        if (IS_FINAL_PROJECT) {
+            startLiveFeedback();
+        }
     </script>
 </body>
 </html>
