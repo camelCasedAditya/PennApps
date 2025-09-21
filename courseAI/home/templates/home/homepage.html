@@ -1,242 +1,46 @@
 {% extends 'home/base.html' %}
-{% load static %}
 
 {% block title %}{{ page_title }}{% endblock %}
 
 {% block content %}
-<!-- Chatbot Section -->
-<section id="chatbot" class="py-5 bg-light">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="text-center mb-4">
-                    <h2 class="display-6 fw-bold mb-3">
-                        <i class="fas fa-robot text-primary me-2"></i>AI Learning Assistant
-                    </h2>
-                    <p class="lead text-muted">Ask me anything about courses, topics, or get study help!</p>
-                </div>
-                
-                <!-- Chatbot Interface -->
-                <div class="chatbot-container bg-white rounded-4 shadow-lg p-4">
-                    <!-- Chat Header -->
-                    <div class="chat-header d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div class="d-flex align-items-center">
-                            <div class="avatar-circle bg-primary text-white me-3">
-                                <i class="fas fa-robot"></i>
-                            </div>
-                            <div>
-                                <h5 class="mb-0">CourseAI Assistant</h5>
-                                <small class="text-success">
-                                    <i class="fas fa-circle me-1"></i>Online
-                                </small>
-                            </div>
-                        </div>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="clearChat()">
-                            <i class="fas fa-refresh"></i>
-                        </button>
-                    </div>
-                    
-                    <!-- Chat Messages Area -->
-                    <div class="chat-messages" id="chatMessages">
-                        <!-- Welcome Message -->
-                        <div class="message-container mb-3">
-                            <div class="message bot-message">
-                                <div class="avatar-sm bg-primary text-white me-2">
-                                    <i class="fas fa-robot"></i>
-                                </div>
-                                <div class="message-content">
-                                    <div class="message-bubble bg-light p-3 rounded-3">
-                                        <p class="mb-0">
-                                            👋 Hello! I'm your AI learning assistant powered by Cerebras. I can help you with:
-                                        </p>
-                                        <ul class="mt-2 mb-0">
-                                            <li>Course recommendations and learning paths</li>
-                                            <li>Explaining complex concepts simply</li>
-                                            <li>Study tips and strategies</li>
-                                            <li>Programming help and code examples</li>
-                                            <li>Career guidance in tech fields</li>
-                                        </ul>
-                                        <p class="mt-2 mb-0 text-success">
-                                            <strong>✨ Ready to help:</strong> Ask me anything about learning and I'll provide personalized assistance!
-                                        </p>
-                                    </div>
-                                    <small class="text-muted ms-2">Just now</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Chat Input -->
-                    <div class="chat-input mt-4">
-                        <div class="input-group">
-                            <input 
-                                type="text" 
-                                class="form-control form-control-lg" 
-                                id="chatInput" 
-                                placeholder="Type your question here..." 
-                                onkeypress="handleEnterKey(event)"
-                            >
-                            <button class="btn btn-primary btn-lg" type="button" onclick="sendMessage()">
-                                <i class="fas fa-paper-plane"></i>
-                            </button>
-                        </div>
-                        <div class="mt-2">
-                            <small class="text-muted">
-                                <i class="fas fa-lightbulb me-1"></i>
-                                Try asking: "What programming language should I learn first?" or "Explain machine learning in simple terms"
-                            </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
+<div class="text-center">
+    <h1 class="display-1 fw-bold text-primary mb-4">Sandbox EDU</h1>
+    <p class="lead text-muted mb-4">Generate AI courses based off of your projects</p>
+    <a href="/generation" class="btn btn-primary btn-lg px-5 py-3">Get Started</a>
+</div>
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    .chatbot-container {
-        max-height: 600px;
-        position: relative;
-    }
-    
-    .chat-messages {
-        height: 400px;
-        overflow-y: auto;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        padding: 15px;
-        background-color: #f8f9fa;
-    }
-    
-    .message-container {
-        margin-bottom: 15px;
-    }
-    
-    .message {
-        display: flex;
-        align-items: flex-start;
-    }
-    
-    .bot-message {
-        justify-content: flex-start;
-    }
-    
-    .user-message {
-        justify-content: flex-end;
-        flex-direction: row-reverse;
-    }
-    
-    .user-message .message-content {
-        text-align: right;
-    }
-    
-    .user-message .message-bubble {
-        background-color: #007bff !important;
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
     }
     
-    .avatar-circle {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
+    .text-primary {
+        color: #ffffff !important;
     }
     
-    .avatar-sm {
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        flex-shrink: 0;
+    .text-muted {
+        color: #e8e9ea !important;
+        font-size: 1.25rem;
     }
     
-    .message-bubble {
-        max-width: 80%;
-        word-wrap: break-word;
-        border: 1px solid #e9ecef;
+    .btn-primary {
+        background-color: #ffffff;
+        border-color: #ffffff;
+        color: #667eea;
+        font-weight: 600;
+        border-radius: 50px;
+        transition: all 0.3s ease;
     }
     
-    .typing-indicator {
-        display: none;
-    }
-    
-    .typing-indicator.show {
-        display: block;
-    }
-    
-    .typing-dots {
-        display: inline-block;
-    }
-    
-    .typing-dots span {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background-color: #999;
-        margin: 0 2px;
-        animation: typing 1.4s infinite;
-    }
-    
-    .typing-dots span:nth-child(2) {
-        animation-delay: 0.2s;
-    }
-    
-    .typing-dots span:nth-child(3) {
-        animation-delay: 0.4s;
-    }
-    
-    @keyframes typing {
-        0%, 60%, 100% {
-            transform: translateY(0);
-        }
-        30% {
-            transform: translateY(-10px);
-        }
-    }
-    
-    /* Responsive design */
-    @media (max-width: 768px) {
-        .chatbot-container {
-            margin: 0 10px;
-        }
-        
-        .chat-messages {
-            height: 300px;
-        }
-        
-        .message-bubble {
-            max-width: 95%;
-        }
-    }
-    
-    /* Fade in animation */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .fade-in {
-        animation: fadeIn 0.5s ease-out;
-    }
-    
-    /* Pulse animation for online status */
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-    }
-    
-    .text-success i {
-        animation: pulse 2s infinite;
+    .btn-primary:hover {
+        background-color: #f8f9fa;
+        border-color: #f8f9fa;
+        color: #667eea;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
     }
 </style>
 {% endblock %}

@@ -9,6 +9,7 @@ from pinecone import Pinecone
 from tavily import TavilyClient
 import dotenv  
 import os
+import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import traceback
@@ -1387,7 +1388,6 @@ def load_lesson_project(request, lesson_id):
                 if os.path.isfile(item_path):
                     os.remove(item_path)
                 elif os.path.isdir(item_path):
-                    import shutil
                     shutil.rmtree(item_path)
     
     # Load project files
@@ -1424,21 +1424,86 @@ def submit_code_correction(request, lesson_id):
         lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
         project = lesson.programming_project
         
-        # Get current code from workspace
+        # Get current code from workspace - read ALL files
         workspace_path = '/Users/aditya/Documents/Programming/Hackathon/PennApps/pennapps25/workspace-python/'
-        code_content = ""
+        all_files_content = {}
         
-        # Read the main file (assuming main.py)
-        main_file_path = os.path.join(workspace_path, 'main.py')
-        if os.path.exists(main_file_path):
-            with open(main_file_path, 'r', encoding='utf-8') as f:
-                code_content = f.read()
+        # Read all Python files and other relevant files in the workspace
+        if os.path.exists(workspace_path):
+            # Directories to skip (common virtual env and cache directories)
+            skip_dirs = {'venv', 'env', '.venv', '.env', '__pycache__', '.git', 'node_modules', 
+                        '.pytest_cache', '.mypy_cache', '.tox', 'build', 'dist', '.eggs'}
+            
+            for root, dirs, files in os.walk(workspace_path):
+                # Skip hidden directories, cache directories, and virtual environments
+                dirs[:] = [d for d in dirs if not d.startswith('.') and d not in skip_dirs]
+                
+                for file in files:
+                    # Skip files that are too large or not relevant for code analysis
+                    if (file.endswith(('.py', '.txt', '.md', '.json', '.yaml', '.yml', '.cfg', '.ini')) and
+                        not file.startswith('.') and 
+                        not file.endswith(('.pyc', '.pyo', '.log'))):
+                        
+                        file_path = os.path.join(root, file)
+                        relative_path = os.path.relpath(file_path, workspace_path)
+                        
+                        try:
+                            # Check file size before reading (skip files larger than 50KB)
+                            if os.path.getsize(file_path) > 50 * 1024:  # 50KB limit
+                                continue
+                                
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                if content.strip() and len(content) < 10000:  # Only include files under 10KB
+                                    all_files_content[relative_path] = content
+                        except (UnicodeDecodeError, OSError, PermissionError):
+                            # Skip binary files, permission issues, or files with encoding issues
+                            continue
         
-        if not code_content.strip():
+        if not all_files_content:
             return JsonResponse({
                 'success': False,
-                'message': 'No code found to correct'
+                'message': 'No code files found to correct'
             })
+        
+        # Create a comprehensive code summary for analysis with size limit
+        # Prioritize files by importance (main.py first, then .py files, then others)
+        file_priority = []
+        for file_path, content in all_files_content.items():
+            if file_path == 'main.py':
+                priority = 0
+            elif file_path.endswith('.py'):
+                priority = 1
+            elif file_path.endswith(('.json', '.yaml', '.yml')):
+                priority = 2
+            else:
+                priority = 3
+            file_priority.append((priority, file_path, content))
+        
+        # Sort by priority
+        file_priority.sort(key=lambda x: x[0])
+        
+        code_summary = "PROJECT FILES:\n" + "="*50 + "\n\n"
+        total_content_size = 0
+        max_content_size = 30000  # 30KB limit for total content
+        files_included = 0
+        
+        for priority, file_path, content in file_priority:
+            file_section = f"FILE: {file_path}\n" + "-"*30 + "\n" + content + "\n\n"
+            
+            # Check if adding this file would exceed our limit
+            if total_content_size + len(file_section) > max_content_size:
+                remaining_files = len(file_priority) - files_included
+                code_summary += f"\n[NOTE: {remaining_files} additional files truncated to stay within analysis limits]\n"
+                break
+                
+            code_summary += file_section
+            total_content_size += len(file_section)
+            files_included += 1
+        
+        print(f"📁 Code correction analyzing {files_included}/{len(all_files_content)} files, total size: {total_content_size} characters")
+        included_files = [item[1] for item in file_priority[:files_included]]
+        print(f"📄 Files included: {included_files}")
         
         # Use Cerebras API to correct the code
         chat_completion = client.chat.completions.create(
@@ -1446,7 +1511,7 @@ def submit_code_correction(request, lesson_id):
                 {
                     "role": "system",
                     "content": f"""
-                    You are an expert Python programming instructor. Your task is to analyze and correct student code for a programming exercise.
+                    You are an expert programming instructor. Your task is to analyze and correct student code for a programming exercise that may contain multiple files.
 
                     Lesson Context:
                     - Lesson: {lesson.lesson_name}
@@ -1454,33 +1519,45 @@ def submit_code_correction(request, lesson_id):
                     - Details: {lesson.lesson_details}
                     - Goals: {lesson.lesson_goals}
 
-                    The student has submitted code that may have errors or could be improved. Your task is to:
-                    1. Identify any syntax errors, logical errors, or improvements needed
-                    2. Provide corrected code
-                    3. Explain what was wrong and how you fixed it
-                    4. Suggest improvements or best practices
-                    5. Give an overall PASS/FAIL assessment based on whether the code meets the lesson requirements
+                    The student has submitted a complete project with multiple files. Your task is to:
+                    1. Analyze ALL files in the project comprehensively
+                    2. Identify syntax errors, logical errors, architectural issues, and improvements needed across all files
+                    3. Check for proper file organization, imports, and inter-file dependencies
+                    4. Provide corrected code for files that need changes
+                    5. Explain what was wrong and how you fixed it across the entire project
+                    6. Suggest improvements, best practices, and architectural recommendations
+                    7. Give an overall PASS/FAIL assessment based on whether the complete project meets lesson requirements
 
                     Return your response as JSON with the following structure:
                     {{
                         "pass_fail": "PASS" or "FAIL",
-                        "corrected_code": "the full corrected code",
-                        "explanation": "detailed explanation of changes",
-                        "issues_found": ["list of issues identified"],
-                        "suggestions": ["list of improvement suggestions"],
-                        "grade": "A letter grade (A, B, C, D, F) based on code quality"
+                        "corrected_code": {{
+                            "main.py": "corrected main file content",
+                            "utils.py": "corrected utils file content",
+                            "other_file.py": "corrected content for other files as needed"
+                        }},
+                        "explanation": "detailed explanation of changes across all files and overall project structure",
+                        "issues_found": ["list of issues identified across all files"],
+                        "suggestions": ["list of improvement suggestions for the entire project"],
+                        "grade": "A letter grade (A, B, C, D, F) based on overall project quality",
+                        "file_analysis": {{
+                            "main.py": "specific analysis and issues for this file",
+                            "utils.py": "specific analysis and issues for this file"
+                        }}
                     }}
 
                     For PASS/FAIL assessment:
-                    - PASS: Code runs without errors and meets the core lesson objectives
-                    - FAIL: Code has critical errors or doesn't meet basic lesson requirements
+                    - PASS: All files work together properly, no critical errors, meets core lesson objectives
+                    - FAIL: Critical errors in any file, improper file organization, or doesn't meet basic lesson requirements
 
-                    Be helpful, educational, and encouraging. Focus on teaching the student why the changes are needed.
+                    Be comprehensive in your analysis - look at the entire project as a cohesive system.
+                    Be helpful, educational, and encouraging. Focus on teaching why changes are needed.
+                    Only include files in corrected_code that actually need corrections.
                     """,
                 },
                 {
                     "role": "user",
-                    "content": f"Here is my code for the lesson '{lesson.lesson_name}':\n\n{code_content}"
+                    "content": f"Here is my complete project for the lesson '{lesson.lesson_name}':\n\n{code_summary}"
                 }
             ],
             model="qwen-3-coder-480b",
@@ -1506,10 +1583,22 @@ def submit_code_correction(request, lesson_id):
                     "grade": "N/A"
                 }
         
-        # Update the file with corrected code
+        # Update files with corrected code
         if 'corrected_code' in correction_data:
-            with open(main_file_path, 'w', encoding='utf-8') as f:
-                f.write(correction_data['corrected_code'])
+            # If correction_data contains file-specific corrections, apply them
+            if isinstance(correction_data['corrected_code'], dict):
+                # Multiple files corrected
+                for file_path, corrected_content in correction_data['corrected_code'].items():
+                    full_file_path = os.path.join(workspace_path, file_path)
+                    os.makedirs(os.path.dirname(full_file_path), exist_ok=True)
+                    with open(full_file_path, 'w', encoding='utf-8') as f:
+                        f.write(corrected_content)
+            else:
+                # Single main file correction (fallback)
+                main_file_path = os.path.join(workspace_path, 'main.py')
+                if os.path.exists(main_file_path):
+                    with open(main_file_path, 'w', encoding='utf-8') as f:
+                        f.write(correction_data['corrected_code'])
         
         return JsonResponse({
             'success': True,

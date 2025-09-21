@@ -3,60 +3,71 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SandboxEdu – AI Learning Platform</title>
+  <title>Sandbox EDU – AI Learning Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     /* Reset & Base */
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
     html, body {
-      height: 100%;
+      min-height: 100vh;
       margin: 0;
       font-family: 'Inter', sans-serif;
-      background: linear-gradient(135deg, #f9fafb, #eef2ff, #e0f2fe);
-      color: #111;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%);
+      color: #334155;
+      display: flex;
+    }
+
+    /* Layout */
+    .sidebar {
+      width: 320px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 30px 20px;
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
+      overflow-y: auto;
+    }
+    .main {
+      flex: 1;
+      padding: 40px;
       display: flex;
       flex-direction: column;
       align-items: center;
     }
 
     /* Header */
-    .logo {
-      margin-top: 60px;
+    .title {
       font-size: 3rem;
       font-weight: 700;
-      background: linear-gradient(90deg, #3b82f6, #6366f1);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: #1e293b;
       text-align: center;
+      margin-top: 20px;
     }
-    .tagline {
-      color: #555;
+    .subtitle {
+      color: #475569;
       font-size: 1.2rem;
-      margin: 12px 0 30px 0;
+      margin: 12px 0 20px 0;
       text-align: center;
       font-weight: 500;
     }
-    .about {
+    .description {
       max-width: 700px;
-      margin: 0 auto 40px auto;
-      color: #333;
+      margin: 0 auto 30px auto;
+      color: #64748b;
       font-size: 1.1rem;
       text-align: center;
       line-height: 1.6;
     }
 
     /* Card */
-    .card {
-      background: rgba(255, 255, 255, 0.7);
+    .course-form {
+      background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
       border-radius: 20px;
       padding: 40px 32px;
       max-width: 700px;
-      width: 90%;
+      width: 100%;
       margin-bottom: 40px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
       animation: fadeIn 0.6s ease-in-out;
     }
     @keyframes fadeIn {
@@ -73,7 +84,7 @@
     }
     textarea {
       width: 100%;
-      min-height: 120px;
+      min-height: 140px;
       padding: 16px;
       border: 2px solid #e0e7ff;
       border-radius: 12px;
@@ -90,21 +101,24 @@
     }
 
     .submit-btn {
-      background: linear-gradient(90deg, #3b82f6, #6366f1);
-      color: #fff;
-      padding: 14px 0;
+      background-color: #334155;
+      color: #ffffff;
+      padding: 16px 0;
       border: none;
-      border-radius: 12px;
-      font-size: 1.1rem;
+      border-radius: 50px;
+      font-size: 1.2rem;
       font-weight: 600;
       cursor: pointer;
-      margin-top: 12px;
-      transition: transform 0.2s, box-shadow 0.2s;
-      box-shadow: 0 4px 12px rgba(99,102,241,0.25);
+      margin-top: 16px;
+      width: 100%;
+      max-width: 400px;
+      transition: all 0.3s ease;
+      box-shadow: 0 10px 20px rgba(51,65,85,0.15);
     }
     .submit-btn:hover {
+      background-color: #1e293b;
       transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(99,102,241,0.3);
+      box-shadow: 0 15px 25px rgba(51,65,85,0.25);
     }
 
     /* Results */
@@ -129,16 +143,12 @@
       font-style: italic;
     }
 
-    /* Recent Courses */
-    .recent-courses {
-      max-width: 700px;
-      width: 90%;
-      margin-bottom: 40px;
-    }
+    /* Sidebar Recent Courses */
     .recent-courses h2 {
       font-size: 1.4rem;
       margin-bottom: 20px;
       font-weight: 600;
+      color: #111;
     }
     .recent-course-item {
       background: #fff;
@@ -187,50 +197,140 @@
   </style>
 </head>
 <body>
-  <div class="logo">SandboxEdu</div>
-  <div class="tagline">AI-powered learning, reimagined.</div>
-  <div class="about">
-    SandboxEdu is your personal AI learning lab. Instantly generate custom courses, practice coding, 
-    and explore new topics—all in one place. Type your learning goal below to get started!
-  </div>
-
-  <div class="card">
-    <form id="generationForm">
-      <div class="form-group">
-        <label for="text">What do you want to learn or build?</label>
-        <textarea id="text" name="text" placeholder="e.g. Build a personal finance app, Learn Python from scratch..." required></textarea>
+  <!-- Sidebar with recent courses -->
+  <aside class="sidebar">
+    {% if recent_courses %}
+    <div class="recent-courses">
+      <h2>Recent Courses</h2>
+      {% for course in recent_courses %}
+      <div class="recent-course-item">
+        <div class="recent-course-title">{{ course.user_prompt|truncatechars:60 }}</div>
+        <div class="recent-course-meta">
+          {{ course.total_chapters }} chapters • {{ course.total_lessons }} lessons
+          {% if course.completed_at %}
+          • Completed {{ course.completed_at|timesince }} ago
+          {% endif %}
+        </div>
+        <a href="{% url 'generation:course_detail' course.id %}" class="recent-course-link">
+          View Course
+        </a>
       </div>
-      <button type="submit" class="submit-btn" id="submitBtn">
-        Generate Course
-      </button>
-    </form>
-    <div id="result" class="result">
-      <div id="resultContent"></div>
-    </div>
-  </div>
-
-  <!-- Recent courses kept same as your Django template -->
-  {% if recent_courses %}
-  <div class="recent-courses">
-    <h2>Recent Courses</h2>
-    {% for course in recent_courses %}
-    <div class="recent-course-item">
-      <div class="recent-course-title">{{ course.user_prompt|truncatechars:60 }}</div>
-      <div class="recent-course-meta">
-        {{ course.total_chapters }} chapters • {{ course.total_lessons }} lessons
-        {% if course.completed_at %}
-        • Completed {{ course.completed_at|timesince }} ago
-        {% endif %}
-      </div>
-      <a href="{% url 'generation:course_detail' course.id %}" class="recent-course-link">
-        View Course
+      {% endfor %}
+      <a href="{% url 'generation:course_list' %}" class="all-courses-link">
+        View All Courses →
       </a>
     </div>
-    {% endfor %}
-    <a href="{% url 'generation:course_list' %}" class="all-courses-link">
-      View All Courses →
-    </a>
-  </div>
-  {% endif %}
-</body>
+    {% endif %}
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+    <div class="main-content">
+      <h1 class="title">SandboxEdu</h1>
+      <p class="subtitle">AI-powered learning, reimagined</p>
+      <p class="description">
+        SandboxEdu is your personal AI learning lab. Instantly generate custom courses, practice coding, and explore new topics—all in one place. Type your learning goal below to get started!
+      </p>
+      <form class="course-form">
+        {% csrf_token %}
+        <label for="course-input">What do you want to learn or build?</label>
+        <textarea id="course-input" name="course-input" placeholder="e.g. Build a personal finance app, Learn Python from scratch..."></textarea>
+        <button type="submit" class="submit-btn" id="submitBtn">
+          Generate Course
+        </button>
+      </form>
+      <div id="result" class="result">
+        <div id="resultContent"></div>
+      </div>
+    </div>
+  </main>
+  </body>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const form = document.querySelector('.course-form');
+      const input = document.getElementById('course-input');
+      const submitBtn = document.getElementById('submitBtn');
+      const resultDiv = document.getElementById('result');
+      const resultContent = document.getElementById('resultContent');
+
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const text = input.value.trim();
+        if (!text) {
+          alert('Please enter what you want to learn or build.');
+          return;
+        }
+
+        // Update UI for loading state
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Generating Course...';
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'result';
+        resultContent.innerHTML = '<div class="loading">🤖 AI is generating your personalized course... This may take a few minutes.</div>';
+
+        try {
+          // Post to the correct absolute URL and include cookies for CSRF validation
+          const response = await fetch('/generation/submit/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken')
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ text: text })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            resultDiv.className = 'result success';
+            resultContent.innerHTML = `
+              <h3>🎉 Course Generated Successfully!</h3>
+              <p><strong>Total Chapters:</strong> ${data.total_chapters}</p>
+              <p><strong>Total Lessons:</strong> ${data.total_lessons}</p>
+              <p>${data.result}</p>
+              <a href="/generation/course/${data.course_generation_id}/" style="display: inline-block; margin-top: 10px; padding: 10px 20px; background: #334155; color: white; text-decoration: none; border-radius: 8px;">View Your Course →</a>
+            `;
+          } else {
+            resultDiv.className = 'result error';
+            resultContent.innerHTML = `
+              <h3>❌ Generation Failed</h3>
+              <p>Error: ${data.error}</p>
+              <p>Please try again with a different prompt.</p>
+            `;
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          resultDiv.className = 'result error';
+          resultContent.innerHTML = `
+            <h3>❌ Connection Error</h3>
+            <p>Failed to connect to the server. Please check your connection and try again.</p>
+            <p>Error details: ${error.message}</p>
+          `;
+        } finally {
+          // Reset button state
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Generate Course';
+        }
+      });
+
+      // Helper function to get CSRF token
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+    });
+  </script>
 </html>

@@ -5,54 +5,122 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Article - {{ lesson.lesson_name }}</title>
   <style>
-    .layout { display: flex; min-height: 100vh; }
-    .content { flex: 1; background: #f8fafc; }
-    .topbar { background: white; border-bottom: 1px solid #e2e8f0; padding: 12px 16px; }
-    .container { max-width: 980px; margin: 0 auto; padding: 20px; }
-    .lesson-header h1 { margin: 10px 0 6px; }
-    .lesson-desc { color: #475569; }
-    .article-body { 
-      background: white; 
-      padding: 40px; 
-      border-radius: 8px; 
-      box-shadow: 0 1px 2px rgba(0,0,0,0.04); 
-      line-height: 1.7;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
     
-    /* Markdown styling */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: #f8fafb;
+      color: #1a1a1a;
+    }
+    
+    .layout { 
+      display: flex; 
+      min-height: 100vh; 
+    }
+    
+    .content { 
+      flex: 1; 
+      background: #f8fafb; 
+    }
+    
+    .topbar { 
+      background: white; 
+      border-bottom: 1px solid #e5e7eb; 
+      padding: 24px 32px;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    }
+    
+    .container { 
+      max-width: 1200px; 
+      margin: 0 auto; 
+      padding: 32px; 
+    }
+    
+    .lesson-header .eyebrow {
+      color: #6b7280;
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    
+    .lesson-header h1 { 
+      margin: 0 0 12px 0;
+      font-size: 32px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.2;
+    }
+    
+    .lesson-desc { 
+      color: #6b7280;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    
+    .article-body { 
+      background: white; 
+      padding: 48px; 
+      border-radius: 12px; 
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      line-height: 1.7;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      border: 1px solid #e5e7eb;
+    }
+    
+    /* Markdown styling - SandboxEdu theme */
     .article-body h1 {
-      font-size: 2em;
-      font-weight: 600;
-      margin: 0 0 24px 0;
-      padding-bottom: 12px;
-      border-bottom: 1px solid #e2e8f0;
-      color: #1a202c;
+      font-size: 2.25em;
+      font-weight: 700;
+      margin: 0 0 32px 0;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #e5e7eb;
+      color: #111827;
     }
     
     .article-body h2 {
-      font-size: 1.5em;
+      font-size: 1.75em;
       font-weight: 600;
-      margin: 32px 0 16px 0;
-      color: #2d3748;
+      margin: 40px 0 20px 0;
+      color: #1f2937;
+      position: relative;
+    }
+    
+    .article-body h2::before {
+      content: '';
+      position: absolute;
+      left: -24px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 4px;
+      height: 24px;
+      background: #3b82f6;
+      border-radius: 2px;
     }
     
     .article-body h3 {
-      font-size: 1.25em;
+      font-size: 1.375em;
       font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: #2d3748;
+      margin: 32px 0 16px 0;
+      color: #1f2937;
     }
     
     .article-body h4, .article-body h5, .article-body h6 {
       font-weight: 600;
-      margin: 20px 0 8px 0;
-      color: #2d3748;
+      margin: 24px 0 12px 0;
+      color: #374151;
     }
     
     .article-body p {
-      margin: 0 0 16px 0;
-      color: #4a5568;
+      margin: 0 0 20px 0;
+      color: #374151;
+      font-size: 16px;
+      line-height: 1.7;
     }
     
     .article-body ul, .article-body ol {
@@ -66,38 +134,43 @@
     }
     
     .article-body blockquote {
-      margin: 16px 0;
-      padding: 16px 20px;
-      background: #f7fafc;
-      border-left: 4px solid #4299e1;
-      border-radius: 0 4px 4px 0;
+      margin: 24px 0;
+      padding: 20px 24px;
+      background: #f0f9ff;
+      border-left: 4px solid #3b82f6;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
     }
     
     .article-body blockquote p {
       margin: 0;
-      color: #2d3748;
+      color: #1e40af;
       font-style: italic;
+      font-weight: 500;
     }
     
     .article-body code {
-      background: #f7fafc;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+      background: #f3f4f6;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
       font-size: 0.875em;
-      color: #e53e3e;
+      color: #dc2626;
+      border: 1px solid #e5e7eb;
     }
     
     .article-body pre {
-      background: #1a202c;
-      color: #e2e8f0;
-      padding: 20px;
-      border-radius: 6px;
+      background: #1f2937;
+      color: #f9fafb;
+      padding: 24px;
+      border-radius: 8px;
       overflow-x: auto;
-      margin: 16px 0;
-      font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+      margin: 24px 0;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
       font-size: 0.875em;
-      line-height: 1.5;
+      line-height: 1.6;
+      border: 1px solid #374151;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     
     .article-body pre code {
@@ -125,38 +198,84 @@
     }
     
     .article-body a {
-      color: #4299e1;
+      color: #3b82f6;
       text-decoration: none;
+      font-weight: 500;
+      border-bottom: 1px solid transparent;
+      transition: all 0.2s ease;
     }
     
     .article-body a:hover {
-      text-decoration: underline;
+      color: #1d4ed8;
+      border-bottom-color: #3b82f6;
     }
     
     .article-body hr {
       border: none;
-      border-top: 1px solid #e2e8f0;
-      margin: 32px 0;
+      border-top: 2px solid #e5e7eb;
+      margin: 48px 0;
     }
     
     .article-body img {
       max-width: 100%;
       height: auto;
-      border-radius: 4px;
-      margin: 16px 0;
+      border-radius: 8px;
+      margin: 24px 0;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     
     .article-body strong {
       font-weight: 600;
-      color: #2d3748;
+      color: #111827;
     }
     
     .article-body em {
       font-style: italic;
+      color: #6b7280;
+    }
+    
+    .article-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 24px 0;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    }
+    
+    .article-body th, .article-body td {
+      border: 1px solid #e5e7eb;
+      padding: 12px 16px;
+      text-align: left;
+    }
+    
+    .article-body th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+    }
+    
+    .article-body tbody tr:hover {
+      background: #f9fafb;
     }
   </style>
   <!-- Include marked.js for Markdown parsing -->
   <script src="https://cdn.jsdelivr.net/npm/marked@5.1.1/marked.min.js"></script>
+  <!-- MathJax configuration for inline and display math -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+        processHtmlClass: 'article-body'
+      }
+    };
+  </script>
+  <!-- Include MathJax for LaTeX rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
   <div class="layout">
@@ -181,6 +300,10 @@
             const markdownContent = `{{ article.content|escapejs }}`;
             const htmlContent = marked.parse(markdownContent);
             document.getElementById('markdown-content').innerHTML = htmlContent;
+            // Render LaTeX using MathJax
+            if (window.MathJax) {
+              MathJax.typesetPromise();
+            }
           </script>
         {% else %}
           <div class="article-body">
