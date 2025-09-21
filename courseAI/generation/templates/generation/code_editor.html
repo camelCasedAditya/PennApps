@@ -322,7 +322,7 @@
                     
                     // Display pass/fail prominently
                     const passFailClass = correction.pass_fail === 'PASS' ? 'success' : 'error';
-                    const passFailHtml = `<div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;" class="${passFailClass}">Result: ${correction.pass_fail} (Grade: ${correction.grade})</div>`;
+                    const passFailHtml = `<div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;" class="${passFailClass}">Result: ${correction.pass_fail}</div>`;
                     
                     // Build file analysis section if available
                     let fileAnalysisHtml = '';
@@ -357,6 +357,11 @@
                         <strong>Improvement Suggestions:</strong>
                         <ul>${correction.suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}</ul>
                     `;
+
+                    // If lesson marked completed, surface a nice message
+                    if (result.lesson_completed) {
+                        showStatus('✓ Lesson marked as completed!', false, false);
+                    }
                 } else {
                     showStatus(`Error: ${result.message}`, true);
                 }

@@ -26,10 +26,15 @@
                 <a href="{% url 'generation:lesson_article' l.id %}" class="lesson-link">📖 {{ l.lesson_name }}</a>
               {% elif l.lesson_type == 'ext' and l.external_article %}
                 <a href="{% url 'generation:lesson_external' l.id %}" class="lesson-link">🔗 {{ l.lesson_name }}</a>
+              {% elif l.lesson_type == 'txt' %}
+                <a href="{% url 'generation:lesson_text_response' l.id %}" class="lesson-link">✍️ {{ l.lesson_name }}</a>
               {% else %}
                 <span class="lesson-link disabled" title="Not available yet">{{ l.lesson_name }}</span>
               {% endif %}
               <span class="badge">{{ l.lesson_type|upper }}</span>
+              {% if l.is_complete %}
+                <span class="complete-indicator" title="Completed">✓</span>
+              {% endif %}
             </li>
           {% endfor %}
         </ul>
@@ -164,6 +169,7 @@
     transition: all 0.2s ease;
     border: 1px solid transparent;
   }
+  .lesson .lesson-link { flex: 1; }
   
   .lesson:hover {
     background: #f9fafb;
@@ -226,6 +232,11 @@
     padding: 16px;
     border-top: 1px solid #e5e7eb;
     background: #f9fafb;
+  }
+  .complete-indicator {
+    margin-left: 8px;
+    color: #16a34a;
+    font-weight: 800;
   }
   
   .back-to-courses-btn {

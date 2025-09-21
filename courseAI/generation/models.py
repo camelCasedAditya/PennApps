@@ -80,6 +80,8 @@ class GeneratedLesson(models.Model):
     lesson_details = models.TextField()
     lesson_goals = models.TextField(help_text="Learning objectives")
     lesson_guidelines = models.TextField(help_text="Guidelines for creating the lesson", blank=True)
+    # Completion tracking
+    is_complete = models.BooleanField(default=False, help_text="Whether the learner has completed this lesson")
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)

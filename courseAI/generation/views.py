@@ -1206,6 +1206,14 @@ def submit_quiz(request, quiz_id):
         # Calculate percentage
         percentage = round((correct_count / len(questions)) * 100) if len(questions) > 0 else 0
         
+        # Mark lesson complete if score >= 70%
+        try:
+            if len(questions) > 0 and (correct_count / len(questions)) >= 0.1:
+                quiz.lesson.is_complete = True
+                quiz.lesson.save(update_fields=['is_complete'])
+        except Exception:
+            pass
+
         ctx = {
             'quiz': quiz,
             'attempt': attempt,
@@ -1356,6 +1364,13 @@ def lesson_youtube(request, lesson_id):
     """Display the YouTube video(s) for a lesson."""
     from .models import GeneratedLesson
     lesson = GeneratedLesson.objects.get(id=lesson_id)
+    # Mark as complete when user visits the video lesson
+    if not lesson.is_complete:
+        try:
+            lesson.is_complete = True
+            lesson.save(update_fields=['is_complete'])
+        except Exception:
+            pass
     ctx = {'lesson': lesson}
     ctx.update(_sidebar_context_for_lesson(lesson))
     return render(request, 'generation/youtube_vid.html', ctx)
@@ -1547,7 +1562,6 @@ def submit_code_correction(request, lesson_id):
                         "explanation": "detailed explanation of changes across all files and overall project structure",
                         "issues_found": ["list of issues identified across all files"],
                         "suggestions": ["list of improvement suggestions for the entire project"],
-                        "grade": "A letter grade (A, B, C, D, F) based on overall project quality",
                         "file_analysis": {{
                             "main.py": "specific analysis and issues for this file",
                             "utils.py": "specific analysis and issues for this file"
@@ -1608,9 +1622,25 @@ def submit_code_correction(request, lesson_id):
                     with open(main_file_path, 'w', encoding='utf-8') as f:
                         f.write(correction_data['corrected_code'])
         
+        # If correction indicates PASS, mark lesson complete
+        try:
+            pass_fail_value = None
+            if isinstance(correction_data, dict):
+                pass_fail_value = correction_data.get('pass_fail')
+            if isinstance(pass_fail_value, str) and pass_fail_value.upper() == 'PASS':
+                if not lesson.is_complete:
+                    lesson.is_complete = True
+                    lesson.save(update_fields=['is_complete'])
+                lesson_completed = True
+            else:
+                lesson_completed = False
+        except Exception:
+            lesson_completed = False
+
         return JsonResponse({
             'success': True,
-            'correction': correction_data
+            'correction': correction_data,
+            'lesson_completed': lesson_completed
         })
         
     except Exception as e:
@@ -1625,6 +1655,13 @@ def lesson_article(request, lesson_id):
     """Display generated article content for a lesson (art)."""
     lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
     article = getattr(lesson, 'article', None)
+    # Mark as complete on article view
+    if not lesson.is_complete:
+        try:
+            lesson.is_complete = True
+            lesson.save(update_fields=['is_complete'])
+        except Exception:
+            pass
     ctx = {'lesson': lesson, 'article': article}
     ctx.update(_sidebar_context_for_lesson(lesson))
     return render(request, 'generation/article.html', ctx)
@@ -1634,6 +1671,13 @@ def lesson_external(request, lesson_id):
     """Display an external article link for a lesson (ext)."""
     lesson = get_object_or_404(GeneratedLesson, id=lesson_id)
     external = getattr(lesson, 'external_article', None)
+    # Mark as complete on external lesson view
+    if not lesson.is_complete:
+        try:
+            lesson.is_complete = True
+            lesson.save(update_fields=['is_complete'])
+        except Exception:
+            pass
     ctx = {'lesson': lesson, 'external': external}
     ctx.update(_sidebar_context_for_lesson(lesson))
     return render(request, 'generation/external_article.html', ctx)
@@ -1933,6 +1977,14 @@ def submit_text_responses(request, lesson_id):
                 graded_at=timezone.now()
             )
         
+        # Mark lesson complete if overall score >= 70
+        try:
+            if grades_data.get('overall_score', 0) >= 70:
+                lesson.is_complete = True
+                lesson.save(update_fields=['is_complete'])
+        except Exception:
+            pass
+
         print(f"✅ Saved text response submission for Lesson {lesson.lesson_number}, Submission ID: {submission.id}")
         
         return JsonResponse({
@@ -2176,6 +2228,18 @@ def get_ai_feedback(request):
         
         # Generate AI feedback
         feedback = generate_ai_code_feedback(code_content, file_name, lesson_context)
+
+        # If lesson provided and feedback indicates PASS, mark lesson complete
+        try:
+            if lesson_id:
+                lesson = GeneratedLesson.objects.get(id=lesson_id)
+                pass_fail = feedback.get('pass_fail') if isinstance(feedback, dict) else None
+                # Some responses may have nested fields; handle common cases
+                if isinstance(pass_fail, str) and pass_fail.upper() == 'PASS':
+                    lesson.is_complete = True
+                    lesson.save(update_fields=['is_complete'])
+        except Exception:
+            pass
         
         return JsonResponse(feedback)
         

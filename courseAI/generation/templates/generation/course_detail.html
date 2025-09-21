@@ -281,15 +281,41 @@
         }
 
         .lesson-type-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            height: 24px;
+            padding: 0 8px;
+            border-radius: 999px;
             font-size: 0.7rem;
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             flex-shrink: 0;
             margin-left: 12px;
             border: 1px solid;
+        }
+
+        .completed-badge {
+            display: inline-flex;
+            align-items: center;
+            height: 24px;
+            padding: 0 10px;
+            margin-left: 8px;
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            white-space: nowrap;
+            line-height: 1;
+        }
+
+        .lesson-badges {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: nowrap;
         }
 
         .type-vid { background: #fdf2f8; color: #be185d; border-color: #f9a8d4; }
@@ -424,39 +450,9 @@
 
         <div class="header">
             <h1 class="course-title">{{ course_generation.user_prompt }}</h1>
-            
-            <div class="course-meta">
-                <div class="meta-item">
-                    <span class="icon">👤</span>
-                    Experience: {{ course_generation.experience_level }}
-                </div>
-                <div class="meta-item">
-                    <span class="icon">📅</span>
-                    Created: {{ course_generation.created_at|date:"M d, Y" }}
-                </div>
-                {% if course_generation.completed_at %}
-                <div class="meta-item">
-                    <span class="icon">✅</span>
-                    Completed: {{ course_generation.completed_at|date:"M d, Y" }}
-                </div>
-                {% endif %}
-                <div class="status-badge status-{{ course_generation.status }}">
-                    {{ course_generation.get_status_display }}
-                </div>
-            </div>
-
-            <div class="progress-section">
-                <h3>Course Progress</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: {{ completion_percentage }}%"></div>
-                </div>
-                <p style="margin-top: 8px; color: #718096; font-size: 0.9rem;">
-                    {{ completion_percentage }}% Complete
-                </p>
-            </div>
         </div>
 
-        <div class="stats-grid">
+        <!-- <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-number">{{ total_chapters }}</div>
                 <div class="stat-label">Chapters</div>
@@ -471,7 +467,7 @@
                 <div class="stat-label">{{ lesson_type|upper }} Lessons</div>
             </div>
             {% endfor %}
-        </div>
+        </div> -->
 
         <div class="chapters-section">
             <h2 class="section-title">
@@ -482,7 +478,7 @@
             {% if chapters %}
                 {% for chapter in chapters %}
                 <div class="chapter">
-                    <div class="chapter-header" onclick="toggleChapter({{ chapter.id }})">
+                    <div class="chapter-header" data-chapter-id="{{ chapter.id }}">
                         <div>
                             <div class="chapter-title">
                                 Chapter {{ chapter.chapter_number }}: {{ chapter.chapter_name }}
@@ -511,8 +507,11 @@
                                     <div class="lesson-title">
                                         L{{ lesson.lesson_number }}: {{ lesson.lesson_name }}
                                     </div>
-                                    <div class="lesson-type-badge type-{{ lesson.lesson_type }}">
-                                        {{ lesson.lesson_type }}
+                                    <div class="lesson-badges">
+                                        <div class="lesson-type-badge type-{{ lesson.lesson_type }}">{{ lesson.lesson_type }}</div>
+                                        {% if lesson.is_complete %}
+                                            <span class="completed-badge" title="Completed">✓ Completed</span>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 
@@ -571,26 +570,24 @@
     </div>
 
     <script>
-        function toggleChapter(chapterId) {
+        function toggleChapterById(chapterId) {
             const content = document.getElementById(`chapter-${chapterId}`);
-            const headerElements = document.querySelectorAll('.chapter-header');
-            
-            // Find the correct header element
-            let header = null;
-            headerElements.forEach(h => {
-                if (h.onclick.toString().includes(`toggleChapter(${chapterId})`)) {
-                    header = h;
-                }
-            });
-            
+            const header = document.querySelector(`.chapter-header[data-chapter-id='${chapterId}']`);
             if (content && header) {
                 content.classList.toggle('active');
                 header.classList.toggle('active');
             }
         }
 
-        // Auto-expand first chapter
+        // Setup click handlers and auto-expand first chapter
         document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.chapter-header').forEach(header => {
+                header.addEventListener('click', function() {
+                    const id = this.getAttribute('data-chapter-id');
+                    toggleChapterById(id);
+                });
+            });
+
             const firstChapter = document.querySelector('.chapter-content');
             const firstHeader = document.querySelector('.chapter-header');
             if (firstChapter && firstHeader) {
